@@ -62,7 +62,7 @@ endif ()
 
 if (PLATFORM_PS4)
     # system on-screen keyboard (text_input.cpp)
-    list(APPEND LDFLAGS SceImeDialog SceCommonDialog SceSysmodule)
+    list(APPEND LDFLAGS SceImeDialog SceCommonDialog SceSysmodule SceUserService)
 endif ()
 
 if (PLATFORM_LINUX OR PLATFORM_WINDOWS)
