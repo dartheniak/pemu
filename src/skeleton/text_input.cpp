@@ -100,7 +100,7 @@ bool TextInput::get(UiMain *ui, const std::string &title, const std::string &ini
     if (!setupDone) {
         setupDone = true;
         logStep(ui, "setup: loading common dialog module");
-        int ret = (int) sceSysmoduleLoadModuleInternal(PEMU_SYSMODULE_INTERNAL_COMMON_DIALOG);
+        int ret = (int) reinterpret_cast<uint32_t (*)(uint32_t)>(&sceSysmoduleLoadModuleInternal)(PEMU_SYSMODULE_INTERNAL_COMMON_DIALOG);
         logStep(ui, "setup: common dialog module: 0x%08x", ret);
         if (ret >= 0) {
             ret = sceSysmoduleLoadModule(ORBIS_SYSMODULE_IME_DIALOG);
