@@ -11,12 +11,14 @@
 #include "pemu.h"
 #include "artwork.h"
 #include "pemu_log.h"
+#include "ps4_dns.h"
 
 using namespace pemu;
 
 #define ARTWORK_USER_AGENT "pppSnes (pEMU fork)"
 #define ARTWORK_CONNECT_TIMEOUT 8
 #define ARTWORK_TIMEOUT 60
+#define ARTWORK_MAX_REDIRECTS 5
 // download thread stack: libcurl + openssl need far more than the small default
 // stack of secondary threads on the ps4 (stack overflow = instant CE-34878-0 crash)
 #define ARTWORK_THREAD_STACK (4 * 1024 * 1024)
@@ -136,45 +138,87 @@ bool Artwork::isMissing(const ss_api::Game &game, Type type) {
 // download "url" to "dstPath": returns the http code (0 = network error)
 int Artwork::httpGet(const std::string &url, const std::string &dstPath, std::string *error) {
     start();
-    logLine("Artwork: get %s", url.c_str());
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        if (error) *error = "curl init failed";
-        return 0;
-    }
-
     const std::string part = dstPath + ".part";
-    FILE *fp = fopen(part.c_str(), "wb");
-    if (!fp) {
-        if (error) *error = "could not write " + part;
-        curl_easy_cleanup(curl);
-        return 0;
-    }
-
-    char errbuf[CURL_ERROR_SIZE] = {0};
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr); // default: fwrite to WRITEDATA
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, ARTWORK_USER_AGENT);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long) ARTWORK_CONNECT_TIMEOUT);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long) ARTWORK_TIMEOUT);
-    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-    if (!m_caFile.empty()) curl_easy_setopt(curl, CURLOPT_CAINFO, m_caFile.c_str());
-
-    const CURLcode res = curl_easy_perform(curl);
+    std::string current = url;
     long code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-    logLine("Artwork: http %li, curl %i %s", code, (int) res, errbuf);
-    curl_easy_cleanup(curl);
-    fclose(fp);
 
-    if (res != CURLE_OK) {
-        if (error) *error = errbuf[0] ? errbuf : curl_easy_strerror(res);
-        remove(part.c_str());
-        return 0;
+    // redirects are followed here rather than by curl, so that every host
+    // goes through our own name lookup on the ps4 (see ps4_dns.h)
+    for (int hop = 0; hop <= ARTWORK_MAX_REDIRECTS; hop++) {
+        logLine("Artwork: get %s", current.c_str());
+
+        std::string host, ip, dnsError;
+        int port = 80;
+        if (!urlHost(current, &host, &port)) {
+            if (error) *error = "bad url " + current;
+            return 0;
+        }
+#ifdef __PS4__
+        if (!resolveHost(host, &ip, &dnsError)) {
+            if (error) *error = dnsError;
+            return 0;
+        }
+#endif
+
+        CURL *curl = curl_easy_init();
+        if (!curl) {
+            if (error) *error = "curl init failed";
+            return 0;
+        }
+        FILE *fp = fopen(part.c_str(), "wb");
+        if (!fp) {
+            if (error) *error = "could not write " + part;
+            curl_easy_cleanup(curl);
+            return 0;
+        }
+
+        struct curl_slist *resolve = nullptr;
+        if (!ip.empty()) {
+            const std::string entry = host + ":" + std::to_string(port) + ":" + ip;
+            resolve = curl_slist_append(resolve, entry.c_str());
+        }
+
+        char errbuf[CURL_ERROR_SIZE] = {0};
+        curl_easy_setopt(curl, CURLOPT_URL, current.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr); // default: fwrite to WRITEDATA
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, ARTWORK_USER_AGENT);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long) ARTWORK_CONNECT_TIMEOUT);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long) ARTWORK_TIMEOUT);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+        curl_easy_setopt(curl, CURLOPT_IPRESOLVE, (long) CURL_IPRESOLVE_V4);
+        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+        if (resolve) curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve);
+        if (!m_caFile.empty()) curl_easy_setopt(curl, CURLOPT_CAINFO, m_caFile.c_str());
+
+        logLine("Artwork: curl perform (%s)", ip.empty() ? host.c_str() : ip.c_str());
+        const CURLcode res = curl_easy_perform(curl);
+        code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+        std::string location;
+        if (res == CURLE_OK && code >= 300 && code < 400) {
+            char *loc = nullptr;
+            curl_easy_getinfo(curl, CURLINFO_REDIRECT_URL, &loc);
+            if (loc) location = loc;
+        }
+        logLine("Artwork: http %li, curl %i %s", code, (int) res, errbuf);
+        curl_easy_cleanup(curl);
+        curl_slist_free_all(resolve);
+        fclose(fp);
+
+        if (res != CURLE_OK) {
+            if (error) *error = errbuf[0] ? errbuf : curl_easy_strerror(res);
+            remove(part.c_str());
+            return 0;
+        }
+        if (!location.empty()) {
+            current = location;
+            continue;
+        }
+        break;
     }
+
     if (code != 200) {
         if (error) *error = "http error " + std::to_string(code);
         remove(part.c_str());
