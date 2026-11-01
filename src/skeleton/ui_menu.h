@@ -47,6 +47,9 @@ namespace pemu {
 
         void testConnection();
 
+        // ARTWORK: download the game information database and the missing images of all games
+        void downloadArtwork();
+
         UiMain *ui = nullptr;
         SkinnedText *title = nullptr;
         c2d::RectangleShape *highlight = nullptr;

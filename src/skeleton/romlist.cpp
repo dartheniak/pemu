@@ -51,6 +51,10 @@ RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<s
 
     gameList = new GameList();
     gameListFav = new GameList();
+
+    // artwork and game information downloads (cores declaring a libretro system)
+    const std::string system = ui->getConfig()->getLibretroSystem();
+    if (!system.empty()) artwork = new Artwork(ui->getIo(), system);
 }
 
 void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
@@ -135,28 +139,13 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
         }
     }
 
-    // sort games
-    printf("RomList::build: sorting games...\n");
-    std::sort(gameList->systemList.systems.begin(), gameList->systemList.systems.end(), Api::sortSystemByName);
-    std::sort(gameList->editors.begin(), gameList->editors.end(), Api::sortEditorByName);
-    std::sort(gameList->developers.begin(), gameList->developers.end(), Api::sortDeveloperByName);
-    std::sort(gameList->genres.begin(), gameList->genres.end(), Api::sortGenreByName);
-    std::sort(gameList->players.begin(), gameList->players.end(), Api::sortInteger);
-    std::sort(gameList->ratings.begin(), gameList->ratings.end(), Api::sortInteger);
-    std::sort(gameList->rotations.begin(), gameList->rotations.end(), Api::sortInteger);
-    std::sort(gameList->resolutions.begin(), gameList->resolutions.end(), Api::sortByName);
-    std::sort(gameList->dates.begin(), gameList->dates.end(), Api::sortByName);
+    // downloaded game information (developer, genre, year...) for games that don't have it
+    if (artwork && artwork->loadDatabase()) {
+        setLoadingText("Applying game information...");
+        artwork->applyDatabase(gameList);
+    }
 
-    // add filtering options
-    printf("RomList::build: add filtering options...\n");
-    auto grp = cfg->getGroup(PEMUConfig::GrpId::UI_FILTERING);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_SYSTEM)->setArray(gameList->systemList.getNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_GENRE)->setArray(gameList->getGenreNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_DATE)->setArray(gameList->getDates(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_EDITOR)->setArray(gameList->getEditorNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_DEVELOPER)->setArray(gameList->getDeveloperNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_PLAYERS)->setArray(gameList->getPlayersNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_RATING)->setArray(gameList->getRatingNames(), 0);
+    updateFilterOptions();
 
     // custom core hide/show flags
     auto ids = cfg->getCoreHiddenOptionToEnable();
@@ -172,6 +161,33 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
 
     // remove ui widgets
     delete (rect);
+}
+
+void RomList::updateFilterOptions() {
+    auto cfg = ui->getConfig();
+
+    // sort games
+    printf("RomList::updateFilterOptions: sorting games...\n");
+    std::sort(gameList->systemList.systems.begin(), gameList->systemList.systems.end(), Api::sortSystemByName);
+    std::sort(gameList->editors.begin(), gameList->editors.end(), Api::sortEditorByName);
+    std::sort(gameList->developers.begin(), gameList->developers.end(), Api::sortDeveloperByName);
+    std::sort(gameList->genres.begin(), gameList->genres.end(), Api::sortGenreByName);
+    std::sort(gameList->players.begin(), gameList->players.end(), Api::sortInteger);
+    std::sort(gameList->ratings.begin(), gameList->ratings.end(), Api::sortInteger);
+    std::sort(gameList->rotations.begin(), gameList->rotations.end(), Api::sortInteger);
+    std::sort(gameList->resolutions.begin(), gameList->resolutions.end(), Api::sortByName);
+    std::sort(gameList->dates.begin(), gameList->dates.end(), Api::sortByName);
+
+    // add filtering options
+    printf("RomList::updateFilterOptions: add filtering options...\n");
+    auto grp = cfg->getGroup(PEMUConfig::GrpId::UI_FILTERING);
+    grp->getOption(PEMUConfig::OptId::UI_FILTER_SYSTEM)->setArray(gameList->systemList.getNames(), 0);
+    grp->getOption(PEMUConfig::OptId::UI_FILTER_GENRE)->setArray(gameList->getGenreNames(), 0);
+    grp->getOption(PEMUConfig::OptId::UI_FILTER_DATE)->setArray(gameList->getDates(), 0);
+    grp->getOption(PEMUConfig::OptId::UI_FILTER_EDITOR)->setArray(gameList->getEditorNames(), 0);
+    grp->getOption(PEMUConfig::OptId::UI_FILTER_DEVELOPER)->setArray(gameList->getDeveloperNames(), 0);
+    grp->getOption(PEMUConfig::OptId::UI_FILTER_PLAYERS)->setArray(gameList->getPlayersNames(), 0);
+    grp->getOption(PEMUConfig::OptId::UI_FILTER_RATING)->setArray(gameList->getRatingNames(), 0);
 }
 
 void RomList::initFav() {
@@ -419,6 +435,7 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
 
 RomList::~RomList() {
     printf("~RomList()\n");
+    delete (artwork);
     delete (gameList);
     delete (gameListFav);
 }

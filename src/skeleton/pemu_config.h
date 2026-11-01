@@ -21,7 +21,8 @@ namespace pemu {
             EMULATION,
             GAMEPAD,
             KEYBOARD,
-            NETWORK
+            NETWORK,
+            ARTWORK
         };
 
         enum OptId {
@@ -70,6 +71,8 @@ namespace pemu {
             NET_SMB_PASSWORD,
             NET_SMB_CLEAR_CACHE,
             NET_SMB_SYSTEM_FOLDER,
+            ART_IMAGE_TYPE,
+            ART_AUTO_DOWNLOAD,
             JOY_UP,
             JOY_DOWN,
             JOY_LEFT,
@@ -143,6 +146,10 @@ namespace pemu {
         // When the network FOLDER is a folder of several consoles ("Roms"), only its sub folders
         // with one of these names are scanned. Empty: the FOLDER is scanned as is.
         virtual std::vector<std::string> getCoreFolderNames() { return {}; }
+
+        // libretro system name for artwork and game information downloads
+        // ("Nintendo - Super Nintendo Entertainment System"). Empty: no artwork downloads.
+        virtual std::string getLibretroSystem() { return ""; }
 
         // getCoreFolderNames() + the user's SYSTEM_FOLDER setting
         std::vector<std::string> getNetworkFolderNames();

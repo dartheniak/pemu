@@ -105,6 +105,14 @@ PEMUConfig::PEMUConfig(Renderer *renderer, const std::string &name, int version)
     addGroup(network);
 #endif
 
+    /// ARTWORK (libretro thumbnails + game information, stored in <data>/media)
+    Group artwork("ARTWORK", ARTWORK);
+    artwork.addOption({"IMAGE", {"BOXART", "TITLE", "SNAP"}, 0, ART_IMAGE_TYPE,
+                       "IMAGE SHOWN FOR EACH GAME (BOX, TITLE SCREEN OR IN-GAME SCREENSHOT)"});
+    artwork.addOption({"AUTO_DOWNLOAD", {"OFF", "ON"}, 1, ART_AUTO_DOWNLOAD,
+                       "ON: DOWNLOAD THE IMAGE OF THE SELECTED GAME WHILE BROWSING"});
+    addGroup(artwork);
+
     /*
      * Emulators options
      */
@@ -230,7 +238,17 @@ bool PEMUConfig::addRomPath(const std::string &name, const std::string &path, co
     printf("PEMUConfig::addRomPath: %s (system: %s, path: %s)\n",
            name.c_str(), system.name.c_str(), path.c_str());
     auto roms = config_lookup(libConfigGetInstance(), std::string(getName() + ".ROMS").c_str());
-    if (roms && config_setting_get_member(roms, name.c_str())) {
+    if (!roms) {
+        // first launch: no config file yet, so no "ROMS" section in memory and the rom path
+        // couldn't be added (upstream "roms not detected on first launch" bug). Create it.
+        Config::save();
+        roms = config_lookup(libConfigGetInstance(), std::string(getName() + ".ROMS").c_str());
+        if (!roms) {
+            printf("PEMUConfig::addRomPath: could not create the ROMS section\n");
+            return false;
+        }
+    }
+    if (config_setting_get_member(roms, name.c_str())) {
         printf("PEMUConfig::addRomPath: %s found in config file, skipping\n", name.c_str());
         return false;
     }

@@ -8,7 +8,7 @@
 
 // menu entries without a config option that can be selected ("buttons")
 static bool isMenuAction(const std::string &name) {
-    return name == "STATES" || name == "QUIT" || name == "TEST_CONNECTION";
+    return name == "STATES" || name == "QUIT" || name == "TEST_CONNECTION" || name == "DOWNLOAD_ALL";
 }
 
 using namespace c2d::config;
@@ -180,7 +180,9 @@ void UiMenu::load(bool isGame) {
         // skip some options if needed
         if (group.getName() == "ROMS") continue;
         if (isRomMenu && (group.getName() == "UI_OPTIONS" || group.getName() == "UI_FILTERING"
-                          || group.getName() == "NETWORK")) continue;
+                          || group.getName() == "NETWORK" || group.getName() == "ARTWORK")) continue;
+        // no artwork downloads for this core
+        if (group.getName() == "ARTWORK" && !ui->getUiRomList()->getRomList()->artwork) continue;
         // push group title
         menu_options.push_back({group.getName(), nullptr});
         auto options = group.getOptions();
@@ -193,6 +195,9 @@ void UiMenu::load(bool isGame) {
         }
         if (group.getName() == "NETWORK") {
             menu_options.push_back({"TEST_CONNECTION", nullptr});
+        }
+        if (group.getName() == "ARTWORK") {
+            menu_options.push_back({"DOWNLOAD_ALL", nullptr});
         }
     }
 
@@ -384,6 +389,10 @@ bool UiMenu::onInput(c2d::Input::Player *players) {
                         }
                         break;
 #endif
+            case PEMUConfig::OptId::ART_IMAGE_TYPE:
+                // show the newly chosen image type
+                ui->getUiRomList()->updateRomList();
+                break;
             case PEMUConfig::OptId::UI_VIDEO_SNAP_DELAY:
                 ui->getUiRomList()->setVideoSnapDelay(option->getInteger());
                 break;
@@ -403,6 +412,8 @@ bool UiMenu::onInput(c2d::Input::Player *players) {
             editNetworkOption(option);
         } else if (lines.at(highlightIndex)->p_name->getString() == "TEST_CONNECTION") {
             testConnection();
+        } else if (lines.at(highlightIndex)->p_name->getString() == "DOWNLOAD_ALL") {
+            downloadArtwork();
         } else if (option && option->getFlags() == PEMUConfig::Flags::INPUT) {
             int new_key = 0;
             int res = ui->getUiMessageBox()->show("NEW INPUT", "PRESS A BUTTON", "", "", &new_key, 9);
@@ -586,6 +597,110 @@ void UiMenu::testConnection() {
                                     : (!names.empty() && !folders.found) ? "TEST CONNECTION: CHECK FOLDER"
                                     : "TEST CONNECTION: OK", message, "OK");
 #endif
+}
+
+void UiMenu::downloadArtwork() {
+    auto romList = ui->getUiRomList()->getRomList();
+    auto artwork = romList->artwork;
+    if (!artwork) return;
+
+    // save the settings now (the app may be closed from the ps4 menu during a long download)
+    ui->getConfig()->save();
+    needSave = false;
+
+    auto progress = ui->getUiProgressBox();
+    progress->setTitle("DOWNLOAD ARTWORK (B / CIRCLE: CANCEL)");
+    progress->setMessage("Downloading game information...");
+    progress->setProgress(0);
+    progress->setVisibility(Visibility::Visible);
+    progress->setLayer(1000);
+    ui->flip(true, false);
+    ui->getInput()->clear();
+
+    // redraw, and tell if the user wants to cancel
+    auto keepGoing = [this]() {
+        ui->flip(true, false);
+        auto players = ui->getInput()->update();
+        return !(players && (players[0].buttons & Input::Button::B));
+    };
+
+    // 1. game information database (developer, genre, year...)
+    std::string error;
+    bool cancelled = false;
+    const bool dbOk = artwork->downloadDatabase([&](int done, int total, const std::string &) {
+        progress->setMessage("Downloading game information (" + std::to_string(done) + "/" +
+                             std::to_string(total) + ")...");
+        progress->setProgress(total ? 0.1f * (float) done / (float) total : 0);
+        if (!keepGoing()) cancelled = true;
+        return !cancelled;
+    }, &error);
+
+    int infoGames = 0;
+    if (dbOk && artwork->loadDatabase()) {
+        infoGames = artwork->applyDatabase(romList->gameList);
+        romList->updateFilterOptions();
+    }
+
+    // 2. images of the games that don't have one yet
+    std::vector<Game> todo;
+    const auto type = ui->getUiRomList()->getArtworkType();
+    if (!cancelled) {
+        for (const auto &g: romList->gameList->games) {
+            if (g.available && artwork->findImage(g, type).empty() && !artwork->isMissing(g, type)) {
+                todo.push_back(g);
+            }
+        }
+    }
+
+    int downloaded = 0, notAvailable = 0, failed = 0, failedInRow = 0;
+    std::string imageError;
+    for (size_t i = 0; i < todo.size() && !cancelled; i++) {
+        progress->setMessage("Image " + std::to_string(i + 1) + " / " + std::to_string(todo.size()) +
+                             ": " + todo[i].name);
+        progress->setProgress(0.1f + 0.9f * (float) i / (float) todo.size());
+        if (!keepGoing()) {
+            cancelled = true;
+            break;
+        }
+        std::string err;
+        if (artwork->downloadImage(todo[i], type, &err)) {
+            downloaded++;
+            failedInRow = 0;
+        } else if (artwork->isMissing(todo[i], type)) {
+            notAvailable++;
+            failedInRow = 0;
+        } else if (++failed, ++failedInRow >= 3) {
+            // network problem: stop instead of failing on every game
+            imageError = err;
+            break;
+        }
+    }
+
+    progress->setProgress(1);
+    ui->flip(true, false);
+    progress->setVisibility(Visibility::Hidden);
+    ui->getInput()->clear();
+
+    // summary
+    std::string message;
+    if (!dbOk && !cancelled) {
+        message = "Game information: download failed (" + error + "). ";
+    } else if (dbOk && infoGames > 0) {
+        message = "Game information added to " + std::to_string(infoGames) +
+                  (infoGames == 1 ? " game. " : " games. ");
+    } else if (dbOk) {
+        message = "Game information is up to date. ";
+    }
+    message += "Images: " + std::to_string(downloaded) + " downloaded";
+    if (notAvailable) message += ", " + std::to_string(notAvailable) + " not available online";
+    if (failed) message += ", " + std::to_string(failed) + " failed";
+    message += ".";
+    if (!imageError.empty()) message += " Stopped: " + imageError + ".";
+    if (cancelled) message += " Cancelled.";
+    printf("UiMenu::downloadArtwork: %s\n", message.c_str());
+    ui->getUiMessageBox()->show("DOWNLOAD ARTWORK", message, "OK");
+
+    ui->getUiRomList()->updateRomList();
 }
 
 UiMenu::~UiMenu() {

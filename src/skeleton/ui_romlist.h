@@ -31,6 +31,9 @@ namespace pemu {
 
         virtual RomList *getRomList();
 
+        // image type chosen in the ARTWORK menu
+        Artwork::Type getArtworkType();
+
         virtual RectangleShape *getBlur() { return pBlur; };
 
         virtual std::string getPreview(const ss_api::Game &game, PreviewType type);

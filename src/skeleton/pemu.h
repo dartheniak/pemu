@@ -19,6 +19,7 @@
 #include "smb_io.h"
 #endif
 
+#include "artwork.h"
 #include "romlist.h"
 #include "skin.h"
 #include "ui_video.h"

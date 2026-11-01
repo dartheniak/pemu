@@ -21,6 +21,11 @@ public:
         return {".zip", ".sfc", ".smc", ".swc", ".fig"};
     }
 
+    // artwork and game information downloads (libretro thumbnails and database)
+    std::string getLibretroSystem() override {
+        return "Nintendo - Super Nintendo Entertainment System";
+    }
+
     // network: snes folder names (No-Intro, EmulationStation/RetroArch and common names).
     // Compared ignoring case, spaces and punctuation.
     std::vector<std::string> getCoreFolderNames() override {

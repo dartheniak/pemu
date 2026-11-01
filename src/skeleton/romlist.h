@@ -15,6 +15,8 @@
 namespace pemu {
     class UiMain;
 
+    class Artwork;
+
     class RomList {
     public:
         RomList(UiMain *ui, const std::string &emuVersion, const std::vector<std::string> &filters);
@@ -40,6 +42,12 @@ namespace pemu {
 
         // local directory where roms from smb:// paths are cached
         std::string getSmbCachePath();
+
+        // artwork and game information downloader (null if the core has no libretro system)
+        Artwork *artwork = nullptr;
+
+        // sort the filter lists (genres, developers...) and update the filter menu options
+        void updateFilterOptions();
 
         // usb drives roots scanned for this console's folder
         virtual std::vector<std::string> getUsbRoots() { return {"/mnt/usb0/", "/mnt/usb1/"}; }

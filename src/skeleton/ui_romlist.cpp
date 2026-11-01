@@ -91,6 +91,12 @@ std::string UIRomList::getPreview(const Game &game, UIRomList::PreviewType type)
     std::string mediaType = type == Tex ? "mixrbv2" : "video";
     std::string mediaExt = type == Tex ? ".png" : ".mp4";
 
+    // downloaded artwork (<data>/media/boxart, title or snap), as chosen in the ARTWORK menu
+    if (type == Tex && pRomList->artwork) {
+        const std::string art = pRomList->artwork->findImage(game, getArtworkType());
+        if (!art.empty()) return art;
+    }
+
     // try media path from database
     std::string path = game.romsPath + game.getMedia(mediaType).url;
     printf("getPreview(%s)\n", path.c_str());
@@ -323,8 +329,18 @@ void UIRomList::onUpdate() {
         mTimerLoadVideo.restart();
     } else {
         if ((mTimerLoadInfoDone == 0) && mTimerLoadInfo.getElapsedTime().asMilliseconds() > mTimerLoadInfoDelay) {
-            pRomInfo->load(pListBox->getSelection());
+            const Game game = pListBox->getSelection();
+            pRomInfo->load(game);
             mTimerLoadInfoDone = 1;
+
+            // no image yet: download it in background (shown as soon as it's there)
+            auto artwork = pRomList->artwork;
+            auto autoDl = pMain->getConfig()->get(PEMUConfig::OptId::ART_AUTO_DOWNLOAD);
+            if (artwork && autoDl && autoDl->getInteger() && !game.path.empty()
+                && getPreview(game, PreviewType::Tex).empty()
+                && !artwork->isMissing(game, getArtworkType())) {
+                artwork->request(game, getArtworkType());
+            }
         }
         if (mTimerLoadVideoDelay > 0 && mTimerLoadVideoDone == 0 &&
             mTimerLoadVideo.getElapsedTime().asMilliseconds() > mTimerLoadVideoDelay) {
@@ -333,7 +349,20 @@ void UIRomList::onUpdate() {
         }
     }
 
+    // an image finished downloading in background: show it if its game is still selected
+    if (pRomList->artwork) {
+        const std::string name = pRomList->artwork->takeDownloaded();
+        if (!name.empty() && Artwork::gameName(pListBox->getSelection()) == name) {
+            pRomInfo->load(pListBox->getSelection());
+        }
+    }
+
     RectangleShape::onUpdate();
+}
+
+Artwork::Type UIRomList::getArtworkType() {
+    auto opt = pMain->getConfig()->get(PEMUConfig::OptId::ART_IMAGE_TYPE);
+    return opt ? (Artwork::Type) opt->getArrayIndex() : Artwork::Type::Boxart;
 }
 
 UIRomList::~UIRomList() {
