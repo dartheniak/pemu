@@ -8,6 +8,7 @@
 #include <functional>
 #include "pemu.h"
 #include "folder_names.h"
+#include "pemu_log.h"
 
 RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<std::string> &_filters) {
     printf("RomList()\n");
@@ -52,6 +53,10 @@ RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<s
     gameList = new GameList();
     gameListFav = new GameList();
 
+    // debug log (<data>/pppsnes.log), see pemu_log.h
+    logInit(ui->getIo()->getDataPath());
+    logLine("RomList: start");
+
     // artwork and game information downloads (cores declaring a libretro system)
     const std::string system = ui->getConfig()->getLibretroSystem();
     if (!system.empty()) artwork = new Artwork(ui->getIo(), system);
@@ -66,6 +71,7 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     ui->flip();
 
     auto romPaths = cfg->getRomPaths();
+    logLine("RomList::build: %zu rom paths", romPaths.size());
     const bool useFolderRules = !cfg->getCoreFolderNames().empty();
     m_scanned.clear();
 
@@ -139,6 +145,8 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
         }
     }
 
+    logLine("RomList::build: %zu games found", gameList->games.size());
+
     // downloaded game information (developer, genre, year...) for games that don't have it
     if (artwork && artwork->loadDatabase()) {
         setLoadingText("Applying game information...");
@@ -157,7 +165,7 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     printf("RomList::build: reloading config...\n");
     cfg->load();
 
-    printf("RomList::build(): list built in %f\n", ui->getElapsedTime().asSeconds() - time_start);
+    logLine("RomList::build: list built in %f", ui->getElapsedTime().asSeconds() - time_start);
 
     // remove ui widgets
     delete (rect);
@@ -324,7 +332,7 @@ void RomList::appendLocal(const std::string &dir, const System &system, int maxD
 
     const std::string xml = ui->getIo()->exist(root + "gamelist.xml") ? root + "gamelist.xml" : "";
     addGames(root, system, roms, xml);
-    printf("RomList::appendLocal: %s, %zu roms (gamelist.xml: %s)\n",
+    logLine("RomList::appendLocal: %s, %zu roms (gamelist.xml: %s)",
            root.c_str(), roms.size(), xml.empty() ? "no" : "yes");
 }
 
@@ -381,7 +389,7 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
     std::string error;
     bool online = SmbIo::listFiles(path, wanted, &remote, &error, maxDepth);
     if (!online) {
-        printf("RomList::appendSmb: %s: %s\n", display.c_str(), error.c_str());
+        logLine("RomList::appendSmb: %s: %s", display.c_str(), error.c_str());
         setLoadingText("Network: %s", SmbIo::friendlyError(error, path).c_str());
         ui->delay(3000);
 
@@ -427,7 +435,7 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
     }
 
     addGames(path, system, roms, localXml);
-    printf("RomList::appendSmb: %s, %zu files (gamelist.xml: %s, online: %s)\n",
+    logLine("RomList::appendSmb: %s, %zu files (gamelist.xml: %s, online: %s)",
            display.c_str(), remote.size(), hasGameList ? "yes" : "no", online ? "yes" : "no");
 }
 

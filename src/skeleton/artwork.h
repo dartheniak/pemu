@@ -93,6 +93,12 @@ namespace pemu {
 
         static int workerMain(void *data);
 
+        // network init, on first download only
+        void start();
+
+        // background thread, on first background request only
+        void startWorker();
+
         int httpGet(const std::string &url, const std::string &dstPath, std::string *error);
 
         std::string mediaPath();
@@ -103,7 +109,9 @@ namespace pemu {
         std::unordered_map<std::string, Info> m_db;
 
         // background worker
-        c2d::Thread *m_thread = nullptr;
+        bool m_started = false;
+        bool m_workerStarted = false;
+        void *m_sdlThread = nullptr;
         c2d::Mutex *m_mutex = nullptr;
         std::atomic<bool> m_quit{false};
         bool m_hasRequest = false;

@@ -10,12 +10,16 @@
 #include <curl/curl.h>
 #include "pemu.h"
 #include "artwork.h"
+#include "pemu_log.h"
 
 using namespace pemu;
 
 #define ARTWORK_USER_AGENT "pppSnes (pEMU fork)"
 #define ARTWORK_CONNECT_TIMEOUT 8
 #define ARTWORK_TIMEOUT 60
+// download thread stack: libcurl + openssl need far more than the small default
+// stack of secondary threads on the ps4 (stack overflow = instant CE-34878-0 crash)
+#define ARTWORK_THREAD_STACK (4 * 1024 * 1024)
 
 static const char *thumbnailFolders[] = {"Named_Boxarts", "Named_Titles", "Named_Snaps"};
 static const char *localFolders[] = {"boxart", "title", "snap"};
@@ -60,22 +64,39 @@ static std::string lowerCase(std::string s) {
 Artwork::Artwork(c2d::Io *io, const std::string &system) {
     m_io = io;
     m_system = system;
-    curl_global_init(CURL_GLOBAL_DEFAULT);
 
     // certificates for https downloads, shipped with the app (the ps4 has no usable ca store)
     const std::string ca = io->getRomFsPath() + "cacert.pem";
     if (fileExists(ca)) m_caFile = ca;
-    printf("Artwork: system \"%s\", ca bundle: %s\n", system.c_str(), m_caFile.empty() ? "none" : m_caFile.c_str());
-
     m_mutex = new C2DMutex();
-    m_thread = new C2DThread(workerMain, this);
+    logLine("Artwork: ready (system \"%s\", certificates: %s)", system.c_str(),
+            m_caFile.empty() ? "none" : m_caFile.c_str());
+    // nothing network related happens before the first download (see start())
+}
+
+void Artwork::start() {
+    if (m_started) return;
+    m_started = true;
+
+    logLine("Artwork: network init");
+    const CURLcode res = curl_global_init(CURL_GLOBAL_DEFAULT);
+    logLine("Artwork: network init done (%i)", (int) res);
+}
+
+void Artwork::startWorker() {
+    start();
+    if (m_workerStarted) return;
+    m_workerStarted = true;
+
+    logLine("Artwork: starting download thread");
+    m_sdlThread = SDL_CreateThreadWithStackSize(workerMain, "artwork", ARTWORK_THREAD_STACK, this);
+    logLine("Artwork: download thread %s", m_sdlThread ? "started" : SDL_GetError());
 }
 
 Artwork::~Artwork() {
     m_quit = true;
-    if (m_thread) {
-        m_thread->join();
-        delete (m_thread);
+    if (m_sdlThread) {
+        SDL_WaitThread((SDL_Thread *) m_sdlThread, nullptr);
     }
     delete (m_mutex);
 }
@@ -114,6 +135,8 @@ bool Artwork::isMissing(const ss_api::Game &game, Type type) {
 
 // download "url" to "dstPath": returns the http code (0 = network error)
 int Artwork::httpGet(const std::string &url, const std::string &dstPath, std::string *error) {
+    start();
+    logLine("Artwork: get %s", url.c_str());
     CURL *curl = curl_easy_init();
     if (!curl) {
         if (error) *error = "curl init failed";
@@ -143,6 +166,7 @@ int Artwork::httpGet(const std::string &url, const std::string &dstPath, std::st
     const CURLcode res = curl_easy_perform(curl);
     long code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+    logLine("Artwork: http %li, curl %i %s", code, (int) res, errbuf);
     curl_easy_cleanup(curl);
     fclose(fp);
 
@@ -348,6 +372,7 @@ int Artwork::applyDatabase(ss_api::GameList *list) {
 }
 
 void Artwork::request(const ss_api::Game &game, Type type) {
+    startWorker();
     m_mutex->lock();
     m_requestName = gameName(game);
     m_requestType = type;
@@ -368,6 +393,7 @@ std::string Artwork::takeDownloaded() {
 
 int Artwork::workerMain(void *data) {
     auto self = (Artwork *) data;
+    logLine("Artwork: download thread running");
     while (!self->m_quit) {
         std::string name;
         Type type = Type::Boxart;

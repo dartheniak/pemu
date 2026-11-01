@@ -3,6 +3,7 @@
 //
 
 #include "main.h"
+#include "skeleton/pemu_log.h"
 
 using namespace c2d;
 using namespace pemu;
@@ -80,6 +81,7 @@ int main(int argc, char **argv) {
         uiEmu->load(game);
     }
 
+    pemu::logLine("main: ui ready");
     while (!pemu_ui->done) {
         pemu_ui->flip();
     }
