@@ -27,10 +27,6 @@ endif ()
 
 # libsmb2 (network roms loading from smb:// paths)
 if (OPTION_SMB)
-    if (PLATFORM_PS4)
-        # libsmb2 enables its PS4 compat layer (PS4_PLATFORM) when PS4 is set
-        set(PS4 ON CACHE BOOL "" FORCE)
-    endif ()
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(ENABLE_UTILS OFF CACHE BOOL "" FORCE)
@@ -38,6 +34,17 @@ if (OPTION_SMB)
     set(ENABLE_GSSAPI OFF CACHE BOOL "" FORCE)
     set(ENABLE_LIBDCERPC OFF CACHE BOOL "" FORCE)
     add_subdirectory(external/libsmb2 EXCLUDE_FROM_ALL)
+    if (PLATFORM_PS4)
+        # Don't use libsmb2's own "PS4" cmake mode: it replaces CMAKE_C_FLAGS,
+        # dropping the OpenOrbis sysroot/include flags, so libsmb2 gets compiled
+        # against the host (glibc) headers and fails to link (__isoc23_strtol, fcntl64).
+        # Enable its PS4 compat code directly instead, and provide the glibc-style
+        # byte swap helpers that its portable-endian.h expects (musl doesn't have them).
+        target_compile_definitions(smb2 PRIVATE PS4_PLATFORM
+                __bswap_16=__builtin_bswap16
+                __bswap_32=__builtin_bswap32
+                __bswap_64=__builtin_bswap64)
+    endif ()
 endif ()
 
 # linux/windows screen handling options
