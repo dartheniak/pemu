@@ -61,6 +61,15 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
 
     auto romPaths = cfg->getRomPaths();
     for (const auto &p: romPaths) {
+        if (Utility::startWith(Utility::toLower(p.path), "smb://")) {
+#ifdef __SMB__
+            appendSmb(p.path, p.system);
+#else
+            printf("RomList::build: skipping %s (built without smb support)\n", p.path.c_str());
+#endif
+            continue;
+        }
+
         std::string gameListPath = p.path + "gamelist.xml";
         gameList->append(gameListPath, p.path, false, filters, p.system, false, [this](Game *game) {
             if (p_cb) p_cb(game);
@@ -154,6 +163,105 @@ void RomList::setLoadingText(const char *format, ...) {
     text->setString(buffer);
     ui->flip();
 }
+
+std::string RomList::getSmbCachePath() {
+    return ui->getIo()->getDataPath() + "cache/smb/";
+}
+
+#ifdef __SMB__
+
+void RomList::appendSmb(const std::string &path, const System &system) {
+    const std::string display = SmbIo::toDisplayUrl(path);
+    setLoadingText("Connecting to %s...", display.c_str());
+
+    // list everything once, then split roms and gamelist.xml
+    std::vector<SmbIo::File> remote;
+    std::string error;
+    if (!SmbIo::listFiles(path, {}, &remote, &error)) {
+        printf("RomList::appendSmb: %s: %s\n", display.c_str(), error.c_str());
+        setLoadingText("SMB error: %s", error.c_str());
+        ui->delay(2000);
+
+        // server unreachable: show what was already downloaded (playable offline)
+        const auto cached = ui->getIo()->getDirList(SmbIo::getCacheDir(getSmbCachePath(), path));
+        for (const auto &f: cached) {
+            if (f.type == c2d::Io::Type::File && !Utility::endsWith(f.name, ".part")) {
+                remote.push_back({f.name, f.size});
+            }
+        }
+        if (remote.empty()) return;
+        printf("RomList::appendSmb: offline, using %zu cached files\n", remote.size());
+    }
+
+    std::vector<std::string> roms;
+    bool hasGameList = false;
+    for (const auto &f: remote) {
+        if (Utility::toLower(f.name) == "gamelist.xml") {
+            hasGameList = true;
+        } else if (SmbIo::matchExt(f.name, filters)) {
+            roms.push_back(f.name);
+        }
+    }
+
+    auto onGameAdded = [this](Game *game) {
+        if (p_cb) p_cb(game);
+        m_games_count++;
+        if (game->available) m_games_available_count++;
+        if (!(m_games_count % 200)) {
+            setLoadingText("Games: %li / %li", m_games_available_count, m_games_count);
+        }
+    };
+
+    gameList->romPaths.emplace_back(path);
+
+    // remote gamelist.xml gives names, genres, dates... (cached locally, refreshed when it changes)
+    if (hasGameList) {
+        const std::string localXml = SmbIo::fetchToCache(
+                path, "gamelist.xml", SmbIo::getCacheDir(getSmbCachePath(), path), nullptr, &error);
+        if (!localXml.empty()) {
+            const size_t start = gameList->games.size();
+            // empty roms path: sscrap must not try to list the remote directory itself
+            gameList->append(localXml, "", false, filters, system, false, nullptr);
+            for (size_t i = start; i < gameList->games.size(); i++) {
+                Game &g = gameList->games[i];
+                g.romsPath = path;
+                // gamelist.xml entries without a screenscraper id: the ui needs an id
+                // for rom info, favorites and per-rom options
+                if (g.id == 0) g.id = std::hash<std::string>()(path + "/" + g.path);
+                auto it = std::find(roms.begin(), roms.end(), g.path);
+                g.available = it != roms.end();
+                if (g.available) roms.erase(it);
+                onGameAdded(&g);
+            }
+        }
+    }
+
+    // roms not in gamelist.xml (same as sscrap "unknown" files)
+    for (const auto &name: roms) {
+        Game game;
+        game.id = std::hash<std::string>()(path + "/" + name);
+        game.path = name;
+        game.romsPath = path;
+        game.name = Utility::removeExt(name);
+        game.available = true;
+        game.system = system;
+        onGameAdded(&game);
+        gameList->games.emplace_back(game);
+    }
+
+    auto &systems = gameList->systemList.systems;
+    if (std::find_if(systems.begin(), systems.end(), [system](const System &s) {
+        return s.id == system.id || s.name == system.name;
+    }) == systems.end()) {
+        systems.emplace_back(system);
+    }
+
+    setLoadingText("Games: %li / %li", m_games_available_count, m_games_count);
+    printf("RomList::appendSmb: %s, %zu files (gamelist.xml: %s)\n",
+           display.c_str(), remote.size(), hasGameList ? "yes" : "no");
+}
+
+#endif
 
 RomList::~RomList() {
     printf("~RomList()\n");

@@ -33,7 +33,15 @@ namespace pemu {
         ss_api::GameList *gameListFav = nullptr;
         ss_api::GameList::GameAddedCb p_cb = nullptr;
 
+        // local directory where roms from smb:// paths are cached
+        std::string getSmbCachePath();
+
     protected:
+#ifdef __SMB__
+        // add games from an smb:// rom path (remote listing + optional remote gamelist.xml)
+        void appendSmb(const std::string &path, const ss_api::System &system);
+#endif
+
         std::vector<std::string> filters;
         size_t m_games_count = 0;
         size_t m_games_available_count = 0;

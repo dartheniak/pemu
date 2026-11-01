@@ -157,6 +157,30 @@ int PSNESUiEmu::load(const ss_api::Game &game) {
     uint32 saved_flags = CPU.Flags;
 
     std::string fullPath = game.romsPath + game.path;
+#ifdef __SMB__
+    if (SmbIo::isSmbPath(game.romsPath)) {
+        // network rom: download it to the local cache, then load it as a regular file
+        pMain->getUiProgressBox()->setMessage("Downloading...");
+        pMain->flip();
+        std::string error;
+        const std::string cacheDir = SmbIo::getCacheDir(
+                pMain->getUiRomList()->getRomList()->getSmbCachePath(), game.romsPath);
+        fullPath = SmbIo::fetchToCache(game.romsPath, game.path, cacheDir,
+                                       [this](uint64_t done, uint64_t total) {
+                                           const float p = total > 0 ? (float) done / (float) total : 1.0f;
+                                           pMain->getUiProgressBox()->setProgress(p * 0.9f);
+                                           pMain->flip();
+                                           return true;
+                                       }, &error);
+        if (fullPath.empty()) {
+            pMain->getUiProgressBox()->setVisibility(Visibility::Hidden);
+            pMain->getUiMessageBox()->show("NETWORK ERROR", error.empty() ? "DOWNLOAD FAILED" : error, "OK");
+            stop();
+            return -1;
+        }
+        pMain->getUiProgressBox()->setMessage("Please wait...");
+    }
+#endif
     printf("Memory.LoadROM: %s\n", fullPath.c_str());
     if (!Memory.LoadROM(fullPath.c_str())) {
         printf("Could not open ROM: %s\n", fullPath.c_str());

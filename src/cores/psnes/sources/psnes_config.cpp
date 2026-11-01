@@ -50,6 +50,8 @@ PSNESConfig::PSNESConfig(Renderer *renderer, int version) : PEMUConfig(renderer,
     // create roms paths if needed
     const auto paths = getRomPaths();
     for (const auto &path: paths) {
+        // network paths (smb://) are not local directories
+        if (Utility::startWith(Utility::toLower(path.path), "smb://")) continue;
         io->create(path.path);
     }
 }

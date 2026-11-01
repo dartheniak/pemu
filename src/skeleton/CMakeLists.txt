@@ -54,6 +54,12 @@ else ()
     list(APPEND FLAGS -DIOAPI_NO_64 -DUSE_FILE32API)
 endif ()
 
+if (OPTION_SMB)
+    list(APPEND FLAGS -D__SMB__)
+    list(APPEND CROSS2DUI_INCLUDE ${CMAKE_SOURCE_DIR}/external/libsmb2/include)
+    list(APPEND LDFLAGS smb2)
+endif ()
+
 if (PLATFORM_LINUX OR PLATFORM_WINDOWS)
     set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
     find_package(Threads REQUIRED)

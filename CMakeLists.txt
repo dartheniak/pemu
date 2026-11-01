@@ -15,9 +15,30 @@ set(OPTION_EMU OFF CACHE STRING "Emulator to build (pfbneo, pnes, psnes)")
 set(OPTION_BUILTIN_LIBCONFIG OFF CACHE BOOL "Build libconfig from sources")
 set(OPTION_MPV_PLAYER ON CACHE BOOL "Add support for video snaps (mpv)")
 set(OPTION_UPDATE_CONFIG OFF CACHE BOOL "Force config file updating")
+# smb support is tested on ps4 (and linux for development), off by default elsewhere
+if (PLATFORM_PS4 OR PLATFORM_LINUX)
+    set(OPTION_SMB ON CACHE BOOL "Load roms from SMB (samba/windows) network shares")
+else ()
+    set(OPTION_SMB OFF CACHE BOOL "Load roms from SMB (samba/windows) network shares")
+endif ()
 ####################
 # BUILD OPTIONS
 ####################
+
+# libsmb2 (network roms loading from smb:// paths)
+if (OPTION_SMB)
+    if (PLATFORM_PS4)
+        # libsmb2 enables its PS4 compat layer (PS4_PLATFORM) when PS4 is set
+        set(PS4 ON CACHE BOOL "" FORCE)
+    endif ()
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_UTILS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LIBKRB5 OFF CACHE BOOL "" FORCE)
+    set(ENABLE_GSSAPI OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LIBDCERPC OFF CACHE BOOL "" FORCE)
+    add_subdirectory(external/libsmb2 EXCLUDE_FROM_ALL)
+endif ()
 
 # linux/windows screen handling options
 if (PLATFORM_LINUX OR PLATFORM_WINDOWS)

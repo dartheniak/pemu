@@ -15,6 +15,10 @@
 
 #endif
 
+#ifdef __SMB__
+#include "smb_io.h"
+#endif
+
 #include "romlist.h"
 #include "skin.h"
 #include "ui_video.h"
