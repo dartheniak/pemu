@@ -14,6 +14,7 @@
 #include <smb2/smb2.h>
 #include <smb2/libsmb2.h>
 #include "smb_io.h"
+#include "folder_names.h"
 
 using namespace pemu;
 
@@ -281,17 +282,8 @@ std::string SmbIo::folderName(const std::string &dirUrl) {
     return slash == std::string::npos ? url.path : url.path.substr(slash + 1);
 }
 
-static std::string folderKey(const std::string &name) {
-    std::string key;
-    for (unsigned char c: name) {
-        if (isalnum(c)) key += (char) tolower(c);
-    }
-    return key;
-}
-
 bool SmbIo::sameFolderName(const std::string &a, const std::string &b) {
-    const std::string ka = folderKey(a);
-    return !ka.empty() && ka == folderKey(b);
+    return pemu::sameFolderName(a, b);
 }
 
 bool SmbIo::findSystemFolders(const std::string &dirUrl, const std::vector<std::string> &names,
