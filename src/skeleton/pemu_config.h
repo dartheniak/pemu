@@ -20,7 +20,8 @@ namespace pemu {
             UI_OPTIONS,
             EMULATION,
             GAMEPAD,
-            KEYBOARD
+            KEYBOARD,
+            NETWORK
         };
 
         enum OptId {
@@ -63,6 +64,11 @@ namespace pemu {
             EMU_PSNES_FRAMESKIP,
             EMU_PSNES_TURBO_MODE,
             EMU_PSNES_TURBO_FRAMESKIP,
+            NET_SMB_SERVER,
+            NET_SMB_FOLDER,
+            NET_SMB_USER,
+            NET_SMB_PASSWORD,
+            NET_SMB_CLEAR_CACHE,
             JOY_UP,
             JOY_DOWN,
             JOY_LEFT,
@@ -125,6 +131,12 @@ namespace pemu {
         bool addRomPath(const std::string &name, const std::string &path, const ss_api::System &system);
 
         std::vector<RomPath> getRomPaths();
+
+        // smb:// url built from the NETWORK settings (empty if no server is set)
+        std::string getNetworkRomPath();
+
+        // system used for games found on the network rom path (first configured rom path system)
+        virtual ss_api::System getNetworkSystem();
 
         std::vector<c2d::Input::ButtonMapping> getKeyboardMapping(int player, bool isGame = false);
 

@@ -4,6 +4,12 @@
 
 #include "pemu.h"
 #include "ui_menu.h"
+#include "text_input.h"
+
+// menu entries without a config option that can be selected ("buttons")
+static bool isMenuAction(const std::string &name) {
+    return name == "STATES" || name == "QUIT" || name == "TEST_CONNECTION";
+}
 
 using namespace c2d::config;
 
@@ -54,7 +60,7 @@ public:
         // this is a menu title (or custom option)
         if (!option) {
             // custom options
-            if (name == "STATES" || name == "QUIT") {
+            if (isMenuAction(name)) {
                 p_value->setVisibility(Visibility::Visible);
                 p_value->setString("GO");
                 return;
@@ -91,7 +97,13 @@ public:
             }
         } else {
             p_value->setVisibility(Visibility::Visible);
-            p_value->setString(option->getString());
+            std::string value = option->getString();
+            if (option->getId() == PEMUConfig::OptId::NET_SMB_PASSWORD && !value.empty()) {
+                value = "********";
+            } else if (option->getType() == Option::Type::String && value.empty()) {
+                value = "-";
+            }
+            p_value->setString(value);
         }
     }
 
@@ -155,7 +167,7 @@ void UiMenu::load(bool isGame) {
     if (isRomMenu) {
         ui->getConfig()->loadGame(game);
         bool useZipName = ui->getConfig()->getOption(PEMUConfig::OptId::UI_SHOW_ZIP_NAMES)->getInteger();
-        title->setString(useZipName ? Utility::removeExt(game.path) : game.name);
+        title->setString(useZipName ? Utility::removeExt(Utility::baseName(game.path)) : game.name);
     } else {
         title->setString("MAIN OPTIONS");
     }
@@ -167,7 +179,8 @@ void UiMenu::load(bool isGame) {
     for (auto &group: *groups) {
         // skip some options if needed
         if (group.getName() == "ROMS") continue;
-        if (isRomMenu && (group.getName() == "UI_OPTIONS" || group.getName() == "UI_FILTERING")) continue;
+        if (isRomMenu && (group.getName() == "UI_OPTIONS" || group.getName() == "UI_FILTERING"
+                          || group.getName() == "NETWORK")) continue;
         // push group title
         menu_options.push_back({group.getName(), nullptr});
         auto options = group.getOptions();
@@ -177,6 +190,9 @@ void UiMenu::load(bool isGame) {
             // push option
             auto opt = ui->getConfig()->get(option.getId(), isGame);
             menu_options.push_back({option.getName(), opt});
+        }
+        if (group.getName() == "NETWORK") {
+            menu_options.push_back({"TEST_CONNECTION", nullptr});
         }
     }
 
@@ -234,7 +250,7 @@ void UiMenu::onKeyUp() {
 
     // skip menus
     auto opt = menu_options.at(optionIndex + highlightIndex);
-    if (opt.option == nullptr && opt.name != "STATES" && opt.name != "QUIT") {
+    if (opt.option == nullptr && !isMenuAction(opt.name)) {
         return onKeyUp();
     }
 
@@ -258,7 +274,7 @@ void UiMenu::onKeyDown() {
 
     // skip menus
     auto opt = menu_options.at(optionIndex + highlightIndex);
-    if (opt.option == nullptr && opt.name != "STATES" && opt.name != "QUIT") {
+    if (opt.option == nullptr && !isMenuAction(opt.name)) {
         return onKeyDown();
     }
 
@@ -383,7 +399,11 @@ bool UiMenu::onInput(c2d::Input::Player *players) {
     // FIRE1 (ENTER)
     if (buttons & Input::Button::A) {
         auto option = lines.at(highlightIndex)->p_option;
-        if (option && option->getFlags() == PEMUConfig::Flags::INPUT) {
+        if (option && isNetworkTextOption(option)) {
+            editNetworkOption(option);
+        } else if (lines.at(highlightIndex)->p_name->getString() == "TEST_CONNECTION") {
+            testConnection();
+        } else if (option && option->getFlags() == PEMUConfig::Flags::INPUT) {
             int new_key = 0;
             int res = ui->getUiMessageBox()->show("NEW INPUT", "PRESS A BUTTON", "", "", &new_key, 9);
             if (res != MessageBox::TIMEOUT) {
@@ -433,6 +453,110 @@ void UiMenu::setVisibility(Visibility visibility, bool tweenPlay) {
     }
 
     RectangleShape::setVisibility(visibility, tweenPlay);
+}
+
+bool UiMenu::isNetworkTextOption(Option *option) {
+    switch (option->getId()) {
+        case PEMUConfig::OptId::NET_SMB_SERVER:
+        case PEMUConfig::OptId::NET_SMB_FOLDER:
+        case PEMUConfig::OptId::NET_SMB_USER:
+        case PEMUConfig::OptId::NET_SMB_PASSWORD:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void UiMenu::editNetworkOption(Option *option) {
+    std::string title;
+    TextInput::Kind kind = TextInput::Kind::Latin;
+    switch (option->getId()) {
+        case PEMUConfig::OptId::NET_SMB_SERVER:
+            title = "Server address (example: 192.168.1.20)";
+            break;
+        case PEMUConfig::OptId::NET_SMB_FOLDER:
+            title = "Share and folder (example: Roms/SNES)";
+            kind = TextInput::Kind::Text;
+            break;
+        case PEMUConfig::OptId::NET_SMB_USER:
+            title = "Username (empty for guest)";
+            break;
+        default:
+            title = "Password";
+            kind = TextInput::Kind::Password;
+            break;
+    }
+
+    std::string value;
+    if (!TextInput::get(ui, title, option->getString(), kind, &value)) return;
+
+    // "\\192.168.1.20\Roms\SNES" pasted in the server field: split it
+    if (option->getId() == PEMUConfig::OptId::NET_SMB_SERVER) {
+        std::string v = value;
+        for (auto &c: v) if (c == '\\') c = '/';
+        while (!v.empty() && v[0] == '/') v.erase(0, 1);
+        if (Utility::startWith(Utility::toLower(v), "smb://")) v = v.substr(6);
+        const size_t slash = v.find('/');
+        if (slash != std::string::npos) {
+            std::string folder = v.substr(slash + 1);
+            while (!folder.empty() && folder.back() == '/') folder.pop_back();
+            if (!folder.empty()) ui->getConfig()->get(PEMUConfig::OptId::NET_SMB_FOLDER)->setString(folder);
+            v = v.substr(0, slash);
+        }
+        value = v;
+    }
+
+    option->setString(value);
+    needSave = true;
+    updateLines();
+    ui->getUiStatusBox()->show("USE TEST_CONNECTION TO CHECK, THEN RESTART THE APP TO LOAD THE GAMES");
+}
+
+void UiMenu::testConnection() {
+#ifdef __SMB__
+    auto cfg = ui->getConfig();
+    const std::string url = cfg->getNetworkRomPath();
+    if (url.empty()) {
+        ui->getUiMessageBox()->show("TEST CONNECTION", "Please set SERVER and FOLDER first.", "OK");
+        return;
+    }
+
+    // save now, so the settings are kept even if the app is closed from the ps4 menu
+    cfg->save();
+    needSave = false;
+
+    const std::string display = SmbIo::toDisplayUrl(url);
+    auto progress = ui->getUiProgressBox();
+    progress->setTitle("TEST CONNECTION");
+    progress->setMessage("Connecting to " + display + "...");
+    progress->setProgress(0);
+    progress->setVisibility(Visibility::Visible);
+    progress->setLayer(1000);
+    ui->flip(true, false);
+
+    std::vector<SmbIo::File> files;
+    std::string error;
+    const bool ok = SmbIo::listFiles(url, cfg->getCoreSupportedExt(), &files, &error, SMB_MAX_FOLDER_DEPTH);
+
+    progress->setProgress(1);
+    ui->flip(true, false);
+    progress->setVisibility(Visibility::Hidden);
+
+    std::string message;
+    if (!ok) {
+        message = SmbIo::friendlyError(error, url);
+    } else if (files.empty()) {
+        message = "Connected to " + display + ", but no games were found in this folder "
+                  "or its sub folders. Check the FOLDER setting.";
+    } else {
+        message = "Connected to " + display + ". Found " + std::to_string(files.size()) +
+                  (files.size() == 1 ? " game" : " games") + ". Restart the app to show them in the list.";
+    }
+    printf("UiMenu::testConnection: %s\n", message.c_str());
+    ui->getUiMessageBox()->show(!ok ? "TEST CONNECTION: FAILED"
+                                    : files.empty() ? "TEST CONNECTION: NO GAMES" : "TEST CONNECTION: OK",
+                                message, "OK");
+#endif
 }
 
 UiMenu::~UiMenu() {

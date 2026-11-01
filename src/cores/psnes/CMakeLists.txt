@@ -108,8 +108,9 @@ if (PLATFORM_VITA)
     set(TITLE_ID "PSNE00001" CACHE STRING "" FORCE)
     list(APPEND SNES9X_LDFLAGS ScePower_stub)
 elseif (PLATFORM_PS4)
-    set(PS4_PKG_TITLE "pSNES - Portable Snes9x")
-    set(PS4_PKG_TITLE_ID "PSNE00001")
+    # pppSnes: own title id so it never clashes with the official pSNES
+    set(PS4_PKG_TITLE "pppSnes")
+    set(PS4_PKG_TITLE_ID "PPPS00001")
     set(PS4_PKG_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}")
 elseif (PLATFORM_SWITCH)
     #####################

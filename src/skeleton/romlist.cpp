@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <functional>
 #include "pemu.h"
 
 RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<std::string> &_filters) {
@@ -60,6 +61,23 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     ui->flip();
 
     auto romPaths = cfg->getRomPaths();
+
+#ifdef __SMB__
+    // network games downloaded in a previous session
+    auto clearCache = cfg->get(PEMUConfig::OptId::NET_SMB_CLEAR_CACHE);
+    if (clearCache && clearCache->getInteger()) {
+        ui->getIo()->removeDir(getSmbCachePath());
+    }
+
+    // network rom path from the NETWORK settings
+    const std::string netPath = cfg->getNetworkRomPath();
+    if (!netPath.empty()) {
+        bool exists = false;
+        for (const auto &p: romPaths) exists |= p.path == netPath;
+        if (!exists) romPaths.push_back({netPath, cfg->getNetworkSystem()});
+    }
+#endif
+
     for (const auto &p: romPaths) {
         if (Utility::startWith(Utility::toLower(p.path), "smb://")) {
 #ifdef __SMB__
@@ -174,21 +192,31 @@ void RomList::appendSmb(const std::string &path, const System &system) {
     const std::string display = SmbIo::toDisplayUrl(path);
     setLoadingText("Connecting to %s...", display.c_str());
 
-    // list everything once, then split roms and gamelist.xml
+    // list roms (and the top level gamelist.xml), sub folders included
+    std::vector<std::string> wanted = filters;
+    wanted.emplace_back("gamelist.xml");
     std::vector<SmbIo::File> remote;
     std::string error;
-    if (!SmbIo::listFiles(path, {}, &remote, &error)) {
+    bool online = SmbIo::listFiles(path, wanted, &remote, &error, SMB_MAX_FOLDER_DEPTH);
+    if (!online) {
         printf("RomList::appendSmb: %s: %s\n", display.c_str(), error.c_str());
-        setLoadingText("SMB error: %s", error.c_str());
-        ui->delay(2000);
+        setLoadingText("Network: %s", SmbIo::friendlyError(error, path).c_str());
+        ui->delay(3000);
 
         // server unreachable: show what was already downloaded (playable offline)
-        const auto cached = ui->getIo()->getDirList(SmbIo::getCacheDir(getSmbCachePath(), path));
-        for (const auto &f: cached) {
-            if (f.type == c2d::Io::Type::File && !Utility::endsWith(f.name, ".part")) {
-                remote.push_back({f.name, f.size});
+        std::function<void(const std::string &, const std::string &)> scan;
+        scan = [&](const std::string &dir, const std::string &rel) {
+            for (const auto &f: ui->getIo()->getDirList(dir)) {
+                if (f.name.empty() || f.name[0] == '.') continue;
+                const std::string name = rel.empty() ? f.name : rel + "/" + f.name;
+                if (f.type == c2d::Io::Type::Directory) {
+                    scan(dir + f.name + "/", name);
+                } else if (!Utility::endsWith(f.name, ".part")) {
+                    remote.push_back({name, f.size});
+                }
             }
-        }
+        };
+        scan(SmbIo::getCacheDir(getSmbCachePath(), path), "");
         if (remote.empty()) return;
         printf("RomList::appendSmb: offline, using %zu cached files\n", remote.size());
     }
@@ -201,6 +229,12 @@ void RomList::appendSmb(const std::string &path, const System &system) {
         } else if (SmbIo::matchExt(f.name, filters)) {
             roms.push_back(f.name);
         }
+    }
+
+    if (online && roms.empty()) {
+        // connected fine but nothing to show: say so instead of failing silently
+        setLoadingText("Network: no games found in %s", display.c_str());
+        ui->delay(3000);
     }
 
     auto onGameAdded = [this](Game *game) {
@@ -242,7 +276,8 @@ void RomList::appendSmb(const std::string &path, const System &system) {
         game.id = std::hash<std::string>()(path + "/" + name);
         game.path = name;
         game.romsPath = path;
-        game.name = Utility::removeExt(name);
+        // "A-M/Some Game.sfc" -> "Some Game"
+        game.name = Utility::removeExt(name.substr(name.find_last_of('/') + 1));
         game.available = true;
         game.system = system;
         onGameAdded(&game);
@@ -257,8 +292,8 @@ void RomList::appendSmb(const std::string &path, const System &system) {
     }
 
     setLoadingText("Games: %li / %li", m_games_available_count, m_games_count);
-    printf("RomList::appendSmb: %s, %zu files (gamelist.xml: %s)\n",
-           display.c_str(), remote.size(), hasGameList ? "yes" : "no");
+    printf("RomList::appendSmb: %s, %zu files (gamelist.xml: %s, online: %s)\n",
+           display.c_str(), remote.size(), hasGameList ? "yes" : "no", online ? "yes" : "no");
 }
 
 #endif

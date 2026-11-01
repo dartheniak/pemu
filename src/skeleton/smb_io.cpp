@@ -160,6 +160,85 @@ bool SmbIo::parseUrl(const std::string &url, Url *out) {
     return !out->server.empty() && !out->share.empty();
 }
 
+static std::string percentEncode(const std::string &s, bool keepSlash) {
+    static const char hex[] = "0123456789ABCDEF";
+    std::string out;
+    for (unsigned char c: s) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || (keepSlash && c == '/')) {
+            out += (char) c;
+        } else {
+            out += '%';
+            out += hex[c >> 4];
+            out += hex[c & 15];
+        }
+    }
+    return out;
+}
+
+static std::string trim(const std::string &s) {
+    size_t a = s.find_first_not_of(" \t\r\n");
+    if (a == std::string::npos) return "";
+    size_t b = s.find_last_not_of(" \t\r\n");
+    return s.substr(a, b - a + 1);
+}
+
+std::string SmbIo::buildUrl(const std::string &serverIn, const std::string &folderIn,
+                            const std::string &user, const std::string &password) {
+    // accept windows style paths and pasted urls: "\\host\share\dir", "smb://host/share"
+    auto normalize = [](std::string s) {
+        s = trim(s);
+        for (auto &c: s) if (c == '\\') c = '/';
+        if (lower(s.substr(0, 6)) == "smb://") s = s.substr(6);
+        return trimSlashes(s);
+    };
+
+    std::string server = normalize(serverIn);
+    std::string folder = normalize(folderIn);
+
+    // "192.168.1.20/Roms/SNES" typed in the server field
+    const size_t slash = server.find('/');
+    if (slash != std::string::npos) {
+        if (folder.empty()) folder = server.substr(slash + 1);
+        server = server.substr(0, slash);
+    }
+    if (server.empty() || folder.empty()) return "";
+
+    std::string url = "smb://";
+    const std::string u = trim(user);
+    if (!u.empty()) {
+        url += percentEncode(u, false);
+        if (!password.empty()) url += ":" + percentEncode(password, false);
+        url += "@";
+    }
+    url += server + "/" + percentEncode(folder, true) + "/";
+    return url;
+}
+
+std::string SmbIo::friendlyError(const std::string &error, const std::string &url) {
+    Url u;
+    parseUrl(url, &u);
+    const std::string e = lower(error);
+    if (e.find("logon_failure") != std::string::npos || e.find("wrong_password") != std::string::npos)
+        return "Wrong username or password.";
+    if (e.find("account") != std::string::npos && e.find("disabled") != std::string::npos)
+        return "This user account is disabled on the server.";
+    if (e.find("bad_network_name") != std::string::npos)
+        return "The share \"" + u.share + "\" was not found on " + u.server + ".";
+    if (e.find("object_name_not_found") != std::string::npos ||
+        e.find("object_path_not_found") != std::string::npos ||
+        e.find("not_a_directory") != std::string::npos)
+        return "The folder \"" + u.path + "\" was not found in the share \"" + u.share + "\".";
+    if (e.find("access_denied") != std::string::npos)
+        return "Access denied. Check the share permissions for this user"
+               + std::string(u.user.empty() ? " (or set a username)." : ".");
+    if (e.find("socket") != std::string::npos || e.find("timeout") != std::string::npos ||
+        e.find("timed out") != std::string::npos || e.find("resolve") != std::string::npos ||
+        e.find("getaddrinfo") != std::string::npos || e.find("no route") != std::string::npos ||
+        e.find("refused") != std::string::npos)
+        return "Could not reach " + u.server + ". Check the address and that the PC/NAS is on.";
+    return error;
+}
+
 bool SmbIo::matchExt(const std::string &name, const std::vector<std::string> &filters) {
     if (filters.empty()) return true;
     const std::string ln = lower(name);
@@ -183,8 +262,43 @@ std::string SmbIo::toDisplayUrl(const std::string &url) {
     return res;
 }
 
+// list "rel" (relative to "base", both share paths), recursing into sub directories
+static bool listDir(smb2_context *smb2, const std::string &base, const std::string &rel,
+                    const std::vector<std::string> &filters, int depthLeft,
+                    std::vector<SmbIo::File> *out, std::string *error) {
+    const std::string path = rel.empty() ? base : (base.empty() ? rel : base + "/" + rel);
+    smb2dir *dir = smb2_opendir(smb2, path.c_str());
+    if (!dir) {
+        setError(error, "could not open folder \"" + path + "\": " + smb2_get_error(smb2));
+        return false;
+    }
+
+    std::vector<std::string> subDirs;
+    smb2dirent *ent;
+    while ((ent = smb2_readdir(smb2, dir))) {
+        if (!ent->name || ent->name[0] == '.') continue;
+        const std::string name = rel.empty() ? std::string(ent->name) : rel + "/" + ent->name;
+        if (ent->st.smb2_type == SMB2_TYPE_DIRECTORY) {
+            if (depthLeft > 0) subDirs.push_back(name);
+            continue;
+        }
+        if (ent->st.smb2_type != SMB2_TYPE_FILE) continue;
+        if (!SmbIo::matchExt(ent->name, filters)) continue;
+        if (out) out->push_back({name, ent->st.smb2_size});
+    }
+    smb2_closedir(smb2, dir);
+
+    // a sub folder we can't open (permissions...) is skipped, not fatal
+    for (const auto &sub: subDirs) {
+        std::string ignored;
+        listDir(smb2, base, sub, filters, depthLeft - 1, out, &ignored);
+    }
+
+    return true;
+}
+
 bool SmbIo::listFiles(const std::string &dirUrl, const std::vector<std::string> &filters,
-                      std::vector<File> *out, std::string *error) {
+                      std::vector<File> *out, std::string *error, int maxDepth) {
     Url url;
     if (!parseUrl(dirUrl, &url)) {
         setError(error, "invalid smb url: " + toDisplayUrl(dirUrl));
@@ -194,24 +308,9 @@ bool SmbIo::listFiles(const std::string &dirUrl, const std::vector<std::string> 
     smb2_context *smb2 = smbConnect(url, error);
     if (!smb2) return false;
 
-    smb2dir *dir = smb2_opendir(smb2, url.path.c_str());
-    if (!dir) {
-        setError(error, "could not open directory \"" + url.path + "\": " + smb2_get_error(smb2));
-        smbDisconnect(smb2);
-        return false;
-    }
-
-    smb2dirent *ent;
-    while ((ent = smb2_readdir(smb2, dir))) {
-        if (!ent->name || ent->name[0] == '.') continue;
-        if (ent->st.smb2_type != SMB2_TYPE_FILE) continue;
-        if (!matchExt(ent->name, filters)) continue;
-        if (out) out->push_back({ent->name, ent->st.smb2_size});
-    }
-
-    smb2_closedir(smb2, dir);
+    const bool ok = listDir(smb2, url.path, "", filters, maxDepth, out, error);
     smbDisconnect(smb2);
-    return true;
+    return ok;
 }
 
 static bool downloadWith(smb2_context *smb2, const std::string &remotePath, const std::string &localPath,
@@ -319,11 +418,13 @@ std::string SmbIo::fetchToCache(const std::string &dirUrl, const std::string &fi
 
     std::string dir = cacheDir;
     if (!dir.empty() && dir.back() != '/') dir += "/";
-    if (!mkdirs(dir)) {
-        setError(error, "could not create cache directory \"" + dir + "\"");
+    const std::string localPath = dir + fileName;
+    // "fileName" may be in a sub folder ("A-M/game.sfc"): mirror it in the cache
+    const std::string localDir = localPath.substr(0, localPath.find_last_of('/') + 1);
+    if (!mkdirs(localDir)) {
+        setError(error, "could not create cache directory \"" + localDir + "\"");
         return "";
     }
-    const std::string localPath = dir + fileName;
 
     smb2_context *smb2 = smbConnect(url, error);
     if (!smb2) {

@@ -40,6 +40,13 @@ namespace pemu {
     private:
         void updateLines();
 
+        // NETWORK settings: text options edited with the (system) keyboard
+        static bool isNetworkTextOption(c2d::config::Option *option);
+
+        void editNetworkOption(c2d::config::Option *option);
+
+        void testConnection();
+
         UiMain *ui = nullptr;
         SkinnedText *title = nullptr;
         c2d::RectangleShape *highlight = nullptr;

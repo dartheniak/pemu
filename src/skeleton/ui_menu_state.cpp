@@ -74,9 +74,9 @@ public:
         memset(path, 0, MAX_PATH);
         memset(shot, 0, MAX_PATH);
         snprintf(path, 1023, "%ssaves/%s-%i.state",
-                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(game.path).c_str(), id);
+                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(Utility::baseName(game.path)).c_str(), id);
         snprintf(shot, 1023, "%ssaves/%s-%i.png",
-                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(game.path).c_str(), id);
+                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(Utility::baseName(game.path)).c_str(), id);
 
         loadTexture();
     }

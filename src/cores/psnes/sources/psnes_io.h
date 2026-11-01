@@ -20,8 +20,9 @@ namespace c2d {
             return "ux0:/data/psnes/";
         }
 #elif __PS4__
+        // pppSnes: own data folder, never shared with the official pSNES
         std::string getDataPath() override {
-            return "/data/psnes/";
+            return "/data/pppsnes/";
         }
 #elif __3DS__
 #ifndef NDEBUG

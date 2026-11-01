@@ -88,6 +88,21 @@ PEMUConfig::PEMUConfig(Renderer *renderer, const std::string &name, int version)
     main.addOption({"SKIN", skins, index, UI_SKIN});
     addGroup(main);
 
+#ifdef __SMB__
+    /// NETWORK (roms on a smb / windows share)
+    Group network("NETWORK", NETWORK);
+    network.addOption({"SERVER", std::string(""), NET_SMB_SERVER,
+                       "PC OR NAS ADDRESS (EXAMPLE: 192.168.1.20)"});
+    network.addOption({"FOLDER", std::string(""), NET_SMB_FOLDER,
+                       "SHARE AND FOLDER (EXAMPLE: ROMS/SNES) - SUB FOLDERS ARE SCANNED TOO"});
+    network.addOption({"USERNAME", std::string(""), NET_SMB_USER,
+                       "LEAVE EMPTY FOR GUEST ACCESS"});
+    network.addOption({"PASSWORD", std::string(""), NET_SMB_PASSWORD});
+    network.addOption({"CLEAR_CACHE_ON_START", {"OFF", "ON"}, 1, NET_SMB_CLEAR_CACHE,
+                       "ON: DELETE DOWNLOADED NETWORK GAMES WHEN THE APP STARTS"});
+    addGroup(network);
+#endif
+
     /*
      * Emulators options
      */
@@ -182,7 +197,7 @@ bool PEMUConfig::loadGame(const Game &game) {
     delete (p_game_config);
 
     // create game configuration
-    std::string path = p_renderer->getIo()->getDataPath() + "configs/" + Utility::removeExt(game.path) + ".cfg";
+    std::string path = p_renderer->getIo()->getDataPath() + "configs/" + Utility::removeExt(Utility::baseName(game.path)) + ".cfg";
     p_game_config = new Config(getName() + "_GAME", path, getAppVersion());
 
     // copy game emulation config section from main config for default options
@@ -263,6 +278,28 @@ std::vector<PEMUConfig::RomPath> PEMUConfig::getRomPaths() {
     }
 
     return romPaths;
+}
+
+std::string PEMUConfig::getNetworkRomPath() {
+#ifdef __SMB__
+    auto server = get(NET_SMB_SERVER);
+    auto folder = get(NET_SMB_FOLDER);
+    auto user = get(NET_SMB_USER);
+    auto pass = get(NET_SMB_PASSWORD);
+    if (!server || !folder || !user || !pass) return "";
+    return SmbIo::buildUrl(server->getString(), folder->getString(), user->getString(), pass->getString());
+#else
+    return "";
+#endif
+}
+
+ss_api::System PEMUConfig::getNetworkSystem() {
+    // single system cores (psnes, pnes...) only have their own rom path
+    const auto paths = getRomPaths();
+    for (const auto &p: paths) {
+        if (!Utility::startWith(Utility::toLower(p.path), "smb://")) return p.system;
+    }
+    return paths.empty() ? ss_api::System{0, 0, "NETWORK"} : paths.at(0).system;
 }
 
 Option *PEMUConfig::getOption(int id, bool isGame) {

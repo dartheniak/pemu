@@ -16,6 +16,9 @@
 #include <functional>
 #include <cstdint>
 
+// how many levels of sub folders are scanned below a network rom folder
+#define SMB_MAX_FOLDER_DEPTH 6
+
 namespace pemu {
     class SmbIo {
     public:
@@ -42,15 +45,27 @@ namespace pemu {
         // parse an smb:// url, returns false on malformed url
         static bool parseUrl(const std::string &url, Url *out);
 
+        // build an smb:// url from plain (not url encoded) settings, as typed by the user.
+        // "server" may also be a full windows path ("\\192.168.1.20\Roms\SNES"), in which
+        // case its share/folder part is used when "folder" is empty.
+        // Returns an empty string if server or share are missing.
+        static std::string buildUrl(const std::string &server, const std::string &folder,
+                                    const std::string &user, const std::string &password);
+
+        // turn a libsmb2 error into a short message for the user
+        static std::string friendlyError(const std::string &error, const std::string &url);
+
         // true if "name" ends with one of "filters" (case insensitive, empty filters = true)
         static bool matchExt(const std::string &name, const std::vector<std::string> &filters);
 
         // url without the password (safe for logging / display)
         static std::string toDisplayUrl(const std::string &url);
 
-        // list files (not directories) in "dirUrl" whose extension is in "filters" (empty = all)
+        // list files (not directories) in "dirUrl" whose extension is in "filters" (empty = all).
+        // Sub folders are scanned up to "maxDepth" levels deep; their files are returned
+        // with a relative name ("A-M/game.sfc").
         static bool listFiles(const std::string &dirUrl, const std::vector<std::string> &filters,
-                              std::vector<File> *out, std::string *error = nullptr);
+                              std::vector<File> *out, std::string *error = nullptr, int maxDepth = 0);
 
         // Return a local path for the remote file "fileName" located in "dirUrl", downloading it
         // into "cacheDir" if needed ("fileName" is a raw file name, not url encoded).

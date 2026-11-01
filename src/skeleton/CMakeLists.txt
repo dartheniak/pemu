@@ -60,6 +60,11 @@ if (OPTION_SMB)
     list(APPEND LDFLAGS smb2)
 endif ()
 
+if (PLATFORM_PS4)
+    # system on-screen keyboard (text_input.cpp)
+    list(APPEND LDFLAGS SceImeDialog SceCommonDialog SceSysmodule)
+endif ()
+
 if (PLATFORM_LINUX OR PLATFORM_WINDOWS)
     set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
     find_package(Threads REQUIRED)

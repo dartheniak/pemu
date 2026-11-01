@@ -148,7 +148,7 @@ void UIListBox::updateLines() {
             // set file
             Game game = games[file_index + i];
             lines[i]->setVisibility(Visibility::Visible);
-            lines[i]->setString(useZipName ? Utility::removeExt(game.path) : game.name);
+            lines[i]->setString(useZipName ? Utility::removeExt(Utility::baseName(game.path)) : game.name);
             // TODO: ICON
             //lines[i]->setIcon(file->icon);
             lines[i]->setColor(game.available ? colorAvailable : colorMissing);
