@@ -27,27 +27,17 @@ endif ()
 
 # libsmb2 (network roms loading from smb:// paths)
 if (OPTION_SMB)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(ENABLE_UTILS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_LIBKRB5 OFF CACHE BOOL "" FORCE)
-    set(ENABLE_GSSAPI OFF CACHE BOOL "" FORCE)
-    set(ENABLE_LIBDCERPC OFF CACHE BOOL "" FORCE)
-    # Don't let libsmb2 use its own "PS4" cmake mode: it replaces CMAKE_C_FLAGS,
-    # dropping the OpenOrbis sysroot/include flags, so libsmb2 gets compiled
-    # against the host (glibc) headers and fails to link (__isoc23_strtol, fcntl64).
-    # The OpenOrbis toolchain file may define PS4 itself, so hide it from libsmb2.
-    set(PEMU_SAVED_PS4 "${PS4}")
-    set(PS4 OFF)
-    add_subdirectory(external/libsmb2 EXCLUDE_FROM_ALL)
-    set(PS4 "${PEMU_SAVED_PS4}")
     if (PLATFORM_PS4)
-        # Enable libsmb2's PS4 compat code directly instead, and provide the glibc-style
-        # byte swap helpers that its portable-endian.h expects (musl doesn't have them).
-        target_compile_definitions(smb2 PRIVATE PS4_PLATFORM
-                __bswap_16=__builtin_bswap16
-                __bswap_32=__builtin_bswap32
-                __bswap_64=__builtin_bswap64)
+        # libsmb2's own cmake breaks the PS4 toolchain flags, see src/smb2-ps4/CMakeLists.txt
+        add_subdirectory(src/smb2-ps4)
+    else ()
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(ENABLE_UTILS OFF CACHE BOOL "" FORCE)
+        set(ENABLE_LIBKRB5 OFF CACHE BOOL "" FORCE)
+        set(ENABLE_GSSAPI OFF CACHE BOOL "" FORCE)
+        set(ENABLE_LIBDCERPC OFF CACHE BOOL "" FORCE)
+        add_subdirectory(external/libsmb2 EXCLUDE_FROM_ALL)
     endif ()
 endif ()
 
