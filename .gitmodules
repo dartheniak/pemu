@@ -19,3 +19,6 @@
 [submodule "external/cores/mgba"]
 	path = external/cores/mgba
 	url = https://github.com/mgba-emu/mgba.git
+[submodule "external/libsmb2"]
+	path = external/libsmb2
+	url = https://github.com/sahlberg/libsmb2
