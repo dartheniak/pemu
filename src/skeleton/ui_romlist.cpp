@@ -333,13 +333,20 @@ void UIRomList::onUpdate() {
             pRomInfo->load(game);
             mTimerLoadInfoDone = 1;
 
-            // no image yet: download it in background (shown as soon as it's there)
+            // missing images (main box and bottom box): download them in background
+            // (shown as soon as they're there)
             auto artwork = pRomList->artwork;
-            auto autoDl = pMain->getConfig()->get(PEMUConfig::OptId::ART_AUTO_DOWNLOAD);
-            if (artwork && autoDl && autoDl->getInteger() && !game.path.empty()
-                && getPreview(game, PreviewType::Tex).empty()
-                && !artwork->isMissing(game, getArtworkType())) {
-                artwork->request(game, getArtworkType());
+            if (artwork && isArtworkAutoDownload() && !game.path.empty()) {
+                std::vector<Artwork::Type> types;
+                if (getPreview(game, PreviewType::Tex).empty() && !artwork->isMissing(game, getArtworkType())) {
+                    types.push_back(getArtworkType());
+                }
+                if (pRomInfo->hasSecondImage() && game.synopsis.empty()
+                    && artwork->findImage(game, getSecondArtworkType()).empty()
+                    && !artwork->isMissing(game, getSecondArtworkType())) {
+                    types.push_back(getSecondArtworkType());
+                }
+                artwork->request(game, types);
             }
         }
         if (mTimerLoadVideoDelay > 0 && mTimerLoadVideoDone == 0 &&
@@ -349,11 +356,41 @@ void UIRomList::onUpdate() {
         }
     }
 
-    // an image finished downloading in background: show it if its game is still selected
     if (pRomList->artwork) {
-        const std::string name = pRomList->artwork->takeDownloaded();
+        auto artwork = pRomList->artwork;
+
+        // first time (or old): get the game information database in background
+        if (!mArtworkDbChecked) {
+            mArtworkDbChecked = true;
+            if (isArtworkAutoDownload() && artwork->needsDatabase()) {
+                artwork->requestDatabase();
+            }
+        }
+
+        // game information downloaded: add it to the games, keep the selected game
+        if (artwork->takeDatabaseReady() && artwork->loadDatabase()) {
+            const int updated = artwork->applyDatabase(pRomList->gameList);
+            pRomList->updateFilterOptions();
+            const int index = pListBox ? pListBox->getIndex() : 0;
+            updateRomList();
+            if (pListBox && index > 0 && index < (int) mGameList.games.size()) {
+                pListBox->setSelection(index);
+            }
+            if (updated > 0) {
+                pMain->getUiStatusBox()->show("GAME INFORMATION ADDED TO %i GAMES", updated);
+            }
+        }
+
+        // an image finished downloading in background: show it if its game is still selected
+        const std::string name = artwork->takeDownloaded();
         if (!name.empty() && Artwork::gameName(pListBox->getSelection()) == name) {
             pRomInfo->load(pListBox->getSelection());
+        }
+
+        // a background download problem (no internet...)
+        const std::string notice = artwork->takeNotice();
+        if (!notice.empty()) {
+            pMain->getUiStatusBox()->show(notice);
         }
     }
 
@@ -363,6 +400,15 @@ void UIRomList::onUpdate() {
 Artwork::Type UIRomList::getArtworkType() {
     auto opt = pMain->getConfig()->get(PEMUConfig::OptId::ART_IMAGE_TYPE);
     return opt ? (Artwork::Type) opt->getArrayIndex() : Artwork::Type::Boxart;
+}
+
+Artwork::Type UIRomList::getSecondArtworkType() {
+    return getArtworkType() == Artwork::Type::Snap ? Artwork::Type::Title : Artwork::Type::Snap;
+}
+
+bool UIRomList::isArtworkAutoDownload() {
+    auto opt = pMain->getConfig()->get(PEMUConfig::OptId::ART_AUTO_DOWNLOAD);
+    return opt && opt->getInteger();
 }
 
 UIRomList::~UIRomList() {

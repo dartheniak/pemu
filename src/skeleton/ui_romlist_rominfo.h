@@ -25,6 +25,11 @@ public:
 
     bool loadTexture(const ss_api::Game &game);
 
+    // bottom box (ROM_SYNOPSIS): the synopsis text, or a downloaded screenshot if there's none
+    void loadSecondImage(const ss_api::Game &game);
+
+    bool hasSecondImage() const { return synoBox != nullptr; }
+
     void load(const ss_api::Game &game = ss_api::Game());
 
     pemu::UiMain *main = nullptr;
@@ -35,6 +40,8 @@ public:
     //
     c2d::RectangleShape *synoBox = nullptr;
     c2d::Text *synoText = nullptr;
+    c2d::C2DTexture *synoTexture = nullptr;
+    std::string synoTexturePath;
     //
     c2d::RectangleShape *previewBox = nullptr;
     //

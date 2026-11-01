@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
+#include <ctime>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <curl/curl.h>
@@ -22,6 +23,12 @@ using namespace pemu;
 // download thread stack: libcurl + openssl need far more than the small default
 // stack of secondary threads on the ps4 (stack overflow = instant CE-34878-0 crash)
 #define ARTWORK_THREAD_STACK (4 * 1024 * 1024)
+// game information database refreshed after this many days
+#define ARTWORK_DB_MAX_AGE_DAYS 30
+// background downloads paused after this many network errors in a row...
+#define ARTWORK_MAX_FAILURES 3
+// ...for this long (ms)
+#define ARTWORK_PAUSE_MS (2 * 60 * 1000)
 
 static const char *thumbnailFolders[] = {"Named_Boxarts", "Named_Titles", "Named_Snaps"};
 static const char *localFolders[] = {"boxart", "title", "snap"};
@@ -415,13 +422,53 @@ int Artwork::applyDatabase(ss_api::GameList *list) {
     return updated;
 }
 
-void Artwork::request(const ss_api::Game &game, Type type) {
+void Artwork::request(const ss_api::Game &game, const std::vector<Type> &types) {
+    if (types.empty()) return;
     startWorker();
     m_mutex->lock();
-    m_requestName = gameName(game);
-    m_requestType = type;
-    m_hasRequest = true;
+    m_requests.clear();
+    for (const auto t: types) m_requests.emplace_back(gameName(game), t);
     m_mutex->unlock();
+}
+
+bool Artwork::needsDatabase() {
+    const time_t now = time(nullptr);
+    for (const auto *field: databaseFields) {
+        struct stat st{};
+        if (stat((mediaPath() + "db/" + field + ".dat").c_str(), &st) != 0) return true;
+        if (now > 0 && st.st_mtime > 0 && now - st.st_mtime > ARTWORK_DB_MAX_AGE_DAYS * 24 * 3600) return true;
+    }
+    return false;
+}
+
+void Artwork::requestDatabase() {
+    startWorker();
+    m_mutex->lock();
+    m_dbRequested = true;
+    m_mutex->unlock();
+}
+
+bool Artwork::takeDatabaseReady() {
+    m_mutex->lock();
+    const bool ready = m_dbReady;
+    m_dbReady = false;
+    m_mutex->unlock();
+    return ready;
+}
+
+void Artwork::setNotice(const std::string &msg) {
+    logLine("Artwork: notice: %s", msg.c_str());
+    m_mutex->lock();
+    m_notice = msg;
+    m_mutex->unlock();
+}
+
+std::string Artwork::takeNotice() {
+    m_mutex->lock();
+    std::string notice = m_notice;
+    m_notice.clear();
+    m_mutex->unlock();
+    return notice;
 }
 
 std::string Artwork::takeDownloaded() {
@@ -441,13 +488,39 @@ int Artwork::workerMain(void *data) {
     while (!self->m_quit) {
         std::string name;
         Type type = Type::Boxart;
+        bool db = false;
+        if (self->m_pauseUntil && SDL_TICKS_PASSED(SDL_GetTicks(), self->m_pauseUntil)) {
+            self->m_pauseUntil = 0;
+        }
+        const bool paused = self->m_pauseUntil != 0;
         self->m_mutex->lock();
-        if (self->m_hasRequest) {
-            name = self->m_requestName;
-            type = self->m_requestType;
-            self->m_hasRequest = false;
+        if (paused) {
+            // no internet: what's asked meanwhile is dropped (asked again when the game is selected)
+            self->m_requests.clear();
+        } else if (self->m_dbRequested) {
+            db = true;
+            self->m_dbRequested = false;
+        } else if (!self->m_requests.empty()) {
+            name = self->m_requests.front().first;
+            type = self->m_requests.front().second;
+            self->m_requests.erase(self->m_requests.begin());
         }
         self->m_mutex->unlock();
+
+        if (db) {
+            std::string error;
+            logLine("Artwork: downloading game information in background");
+            if (self->downloadDatabase(nullptr, &error)) {
+                self->m_mutex->lock();
+                self->m_dbReady = true;
+                self->m_mutex->unlock();
+                self->m_failuresInRow = 0;
+            } else {
+                logLine("Artwork: game information: %s", error.c_str());
+                self->setNotice("GAME INFORMATION DOWNLOAD FAILED, CHECK THE INTERNET CONNECTION");
+            }
+            continue;
+        }
 
         if (name.empty()) {
             usleep(50 * 1000);
@@ -462,9 +535,18 @@ int Artwork::workerMain(void *data) {
                                 [self](const std::string &u, const std::string &d, std::string *e) {
                                     return self->httpGet(u, d, e);
                                 }, &error)) {
+            self->m_failuresInRow = 0;
             self->m_mutex->lock();
             self->m_downloaded.push_back(name);
             self->m_mutex->unlock();
+        } else if (fileExists(path + ".missing")) {
+            self->m_failuresInRow = 0; // the server answered: no image for this game
+        } else if (++self->m_failuresInRow >= ARTWORK_MAX_FAILURES) {
+            self->m_failuresInRow = 0;
+            self->m_pauseUntil = SDL_GetTicks() + ARTWORK_PAUSE_MS;
+            if (!self->m_pauseUntil) self->m_pauseUntil = 1;
+            logLine("Artwork: paused after errors: %s", error.c_str());
+            self->setNotice("ARTWORK: NO INTERNET CONNECTION, RETRYING IN 2 MINUTES");
         }
     }
     return 0;

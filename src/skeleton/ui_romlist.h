@@ -34,6 +34,13 @@ namespace pemu {
         // image type chosen in the ARTWORK menu
         Artwork::Type getArtworkType();
 
+        // image type shown in the bottom box (ROM_SYNOPSIS) when the game has no synopsis:
+        // the screenshot, or the title screen if the screenshot is already the main image
+        Artwork::Type getSecondArtworkType();
+
+        // true if images and game information are downloaded automatically (ARTWORK menu)
+        bool isArtworkAutoDownload();
+
         virtual RectangleShape *getBlur() { return pBlur; };
 
         virtual std::string getPreview(const ss_api::Game &game, PreviewType type);
@@ -58,6 +65,7 @@ namespace pemu {
         SkinnedText *pTitleText = nullptr;
         ss_api::GameList mGameList;
         bool mShowSystemText = false;
+        bool mArtworkDbChecked = false;
 
         c2d::C2DClock mTimerLoadInfo;
 #ifdef __3DS__

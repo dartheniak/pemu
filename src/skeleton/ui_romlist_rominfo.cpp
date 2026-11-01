@@ -21,6 +21,7 @@ UIRomInfo::UIRomInfo(UiMain *u, UIRomList *uiRList, Font *fnt, int fntSize)
         Rectangle::add(synoBox);
     } else {
         delete (synoBox);
+        synoBox = nullptr;
     }
 
     // info box
@@ -131,6 +132,51 @@ bool UIRomInfo::loadTexture(const Game &game) {
     return true;
 }
 
+void UIRomInfo::loadSecondImage(const Game &game) {
+    if (!synoBox) return;
+
+    std::string path;
+    auto artwork = uiRomList->getRomList()->artwork;
+    if (artwork && !game.path.empty() && game.synopsis.empty()) {
+        path = artwork->findImage(game, uiRomList->getSecondArtworkType());
+    }
+
+    if (path.empty()) {
+        if (synoTexture) synoTexture->setVisibility(Visibility::Hidden);
+        synoTexturePath.clear();
+        return;
+    }
+    if (path == synoTexturePath && synoTexture) {
+        synoTexture->setVisibility(Visibility::Visible);
+        return;
+    }
+
+    if (synoTexture) {
+        synoBox->remove(synoTexture);
+        delete (synoTexture);
+        synoTexture = nullptr;
+    }
+    auto tex = new C2DTexture(path);
+    if (!tex->available || tex->getTextureRect().width <= 0 || tex->getTextureRect().height <= 0) {
+        delete (tex);
+        synoTexturePath.clear();
+        return;
+    }
+    // fit the box (aspect ratio kept, small margin), centered
+    const Vector2f box = synoBox->getSize();
+    const float margin = 6;
+    const float scaling = std::min((box.x - margin * 2) / (float) tex->getTextureRect().width,
+                                   (box.y - margin * 2) / (float) tex->getTextureRect().height);
+    tex->setOrigin(Origin::Center);
+    tex->setPosition(box.x / 2, box.y / 2);
+    tex->setScale(scaling, scaling);
+    tex->setAlpha(0);
+    tex->add(new TweenAlpha(0, 255, 0.3f, TweenLoop::None, TweenState::Playing));
+    synoBox->add(tex);
+    synoTexture = tex;
+    synoTexturePath = path;
+}
+
 void UIRomInfo::load(const Game &game) {
     if (game.id <= 0) {
         // try to load title/preview texture even if game is not in DB
@@ -145,6 +191,7 @@ void UIRomInfo::load(const Game &game) {
         hideText(cloneofText);
         hideText(filenameText);
         hideText(synoText);
+        loadSecondImage(game);
 #if __MPV__
         mpvTexture->setVisibility(Visibility::Hidden, true);
         mpv->stop();
@@ -163,6 +210,7 @@ void UIRomInfo::load(const Game &game) {
         showText(cloneofText, "Clone Of: " + (game.cloneOf.empty() ? "NONE" : game.cloneOf));
         showText(filenameText, "File: " + game.path);
         showText(synoText, game.synopsis);
+        loadSecondImage(game);
     }
 }
 

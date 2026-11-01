@@ -74,6 +74,7 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     logLine("RomList::build: %zu rom paths", romPaths.size());
     const bool useFolderRules = !cfg->getCoreFolderNames().empty();
     m_scanned.clear();
+    warnings.clear();
 
 #ifdef __SMB__
     // network games downloaded in a previous session
@@ -93,6 +94,8 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
             if (!folders.found && !cfg->getNetworkFolderNames().empty()) {
                 setLoadingText("Network: no %s folder found in %s, using its files only",
                                cfg->getNetworkSystem().name.c_str(), display.c_str());
+                warnings.push_back("Network: no " + cfg->getNetworkSystem().name + " folder found in " + display +
+                                   ", only the games directly in it are listed.");
                 ui->delay(3000);
             }
             for (const auto &url: folders.urls) {
@@ -146,6 +149,13 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     }
 
     logLine("RomList::build: %zu games found", gameList->games.size());
+    if (gameList->games.empty() && useFolderRules) {
+        const auto names = cfg->getCoreFolderNames();
+        const std::string folder = names.empty() ? "" : names.back();
+        warnings.push_back("No games found. Add games to " + ui->getIo()->getDataPath() + "roms/" +
+                           (folder.empty() ? "" : ", a \"" + folder + "\" folder on a USB drive") +
+                           " or a network share (main menu, NETWORK).");
+    }
 
     // downloaded game information (developer, genre, year...) for games that don't have it
     if (artwork && artwork->loadDatabase()) {
@@ -407,7 +417,14 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
             }
         };
         scan(SmbIo::getCacheDir(getSmbCachePath(), path), "");
-        if (remote.empty()) return;
+        std::string warning = "Network: " + SmbIo::friendlyError(error, path);
+        while (!warning.empty() && warning.back() == '.') warning.pop_back();
+        if (remote.empty()) {
+            warnings.push_back(warning + ".");
+            return;
+        }
+        warnings.push_back(warning + ". Showing " + std::to_string(remote.size()) +
+                           " network games played before (offline).");
         printf("RomList::appendSmb: offline, using %zu cached files\n", remote.size());
     }
 
@@ -424,6 +441,7 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
     if (online && roms.empty()) {
         // connected fine but nothing to show: say so instead of failing silently
         setLoadingText("Network: no games found in %s", display.c_str());
+        warnings.push_back("Network: connected, but no games found in " + display + ".");
         ui->delay(3000);
     }
 

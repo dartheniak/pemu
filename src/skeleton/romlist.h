@@ -49,6 +49,10 @@ namespace pemu {
         // sort the filter lists (genres, developers...) and update the filter menu options
         void updateFilterOptions();
 
+        // problems found while building the list (network unreachable, no games...),
+        // shown in a message box once the ui is ready
+        std::vector<std::string> warnings;
+
         // usb drives roots scanned for this console's folder
         virtual std::vector<std::string> getUsbRoots() { return {"/mnt/usb0/", "/mnt/usb1/"}; }
 

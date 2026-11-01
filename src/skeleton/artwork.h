@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <functional>
 #include <atomic>
+#include <cstdint>
 
 namespace ss_api {
     class Game;
@@ -76,11 +77,24 @@ namespace pemu {
         // Returns the number of games updated.
         int applyDatabase(ss_api::GameList *list);
 
-        // background download of one image (latest request wins)
-        void request(const ss_api::Game &game, Type type);
+        // background download of a game's images (replaces the previous requests: only the
+        // selected game matters)
+        void request(const ss_api::Game &game, const std::vector<Type> &types);
 
         // name of an image downloaded in background since the last call (empty if none)
         std::string takeDownloaded();
+
+        // true if the game information database was never downloaded, or is old
+        bool needsDatabase();
+
+        // download the game information database in background (done before the images)
+        void requestDatabase();
+
+        // true once, after a background database download succeeded
+        bool takeDatabaseReady();
+
+        // a message about a background download problem (no internet...), empty if none
+        std::string takeNotice();
 
         // number of games in the loaded database
         size_t databaseSize() const { return m_db.size(); }
@@ -114,10 +128,16 @@ namespace pemu {
         void *m_sdlThread = nullptr;
         c2d::Mutex *m_mutex = nullptr;
         std::atomic<bool> m_quit{false};
-        bool m_hasRequest = false;
-        std::string m_requestName;
-        Type m_requestType = Type::Boxart;
+        std::vector<std::pair<std::string, Type>> m_requests;
         std::vector<std::string> m_downloaded;
+        bool m_dbRequested = false;
+        bool m_dbReady = false;
+        std::string m_notice;
+        // after network failures, background downloads stop until this time (SDL ticks)
+        uint32_t m_pauseUntil = 0;
+        int m_failuresInRow = 0;
+
+        void setNotice(const std::string &msg);
     };
 }
 

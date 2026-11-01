@@ -81,6 +81,16 @@ int main(int argc, char **argv) {
         uiEmu->load(game);
     }
 
+    // problems found while listing the games (network unreachable, no games...)
+    if (game.path.empty() && !romList->warnings.empty()) {
+        std::string message;
+        for (const auto &w: romList->warnings) {
+            pemu::logLine("main: warning: %s", w.c_str());
+            message += (message.empty() ? "" : "\n\n") + w;
+        }
+        pemu_ui->getUiMessageBox()->show("WARNING", message, "OK");
+    }
+
     pemu::logLine("main: ui ready");
     while (!pemu_ui->done) {
         pemu_ui->flip();
