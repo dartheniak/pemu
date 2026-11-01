@@ -1,0 +1,844 @@
+diff --git a/.github/workflows/ps4-psnes-smb.yml b/.github/workflows/ps4-psnes-smb.yml
+new file mode 100644
+index 0000000..1672e70
+--- /dev/null
++++ b/.github/workflows/ps4-psnes-smb.yml
+@@ -0,0 +1,49 @@
++name: ps4-psnes-smb
++
++# Builds only pSNES for PS4 and uploads the .pkg so it can be downloaded
++# from the workflow run page (Actions tab -> run -> Artifacts).
++on:
++  workflow_dispatch:
++
++jobs:
++  build-psnes-ps4:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          submodules: recursive
++
++      - name: Install build dependencies
++        run: |
++          sudo apt -yq update
++          sudo apt -yq install git build-essential cmake zip \
++            pacman-package-manager makepkg libarchive-tools autoconf libtool \
++            cmake nasm git curl
++
++      - name: Install ps4 toolchain
++        run: |
++          sudo tee -a /etc/pacman.conf > /dev/null <<EOF
++          [pacbrew]
++          SigLevel = Optional TrustAll
++          Server = https://pacman.mydedibox.fr/pacbrew/packages/
++          EOF
++          sudo pacman -Syu
++          sudo pacman --noconfirm -S ps4-openorbis ps4-openorbis-portlibs
++
++      - name: Configure
++        run: |
++          mkdir cmake-build && cd cmake-build
++          export OPENORBIS=/opt/pacbrew/ps4/openorbis
++          cmake -G "Unix Makefiles" -DPLATFORM_PS4=ON -DOPTION_SMB=ON -DCMAKE_BUILD_TYPE=Release ..
++
++      - name: Build psnes
++        run: |
++          cd cmake-build
++          make psnes_pkg
++          mv *.pkg $GITHUB_WORKSPACE
++
++      - name: Upload pkg
++        uses: actions/upload-artifact@v4
++        with:
++          name: psnes-ps4-smb
++          path: '*.pkg'
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b4350b4..bc5753d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,10 +15,31 @@ set(OPTION_EMU OFF CACHE STRING "Emulator to build (pfbneo, pnes, psnes)")
+ set(OPTION_BUILTIN_LIBCONFIG OFF CACHE BOOL "Build libconfig from sources")
+ set(OPTION_MPV_PLAYER ON CACHE BOOL "Add support for video snaps (mpv)")
+ set(OPTION_UPDATE_CONFIG OFF CACHE BOOL "Force config file updating")
++# smb support is tested on ps4 (and linux for development), off by default elsewhere
++if (PLATFORM_PS4 OR PLATFORM_LINUX)
++    set(OPTION_SMB ON CACHE BOOL "Load roms from SMB (samba/windows) network shares")
++else ()
++    set(OPTION_SMB OFF CACHE BOOL "Load roms from SMB (samba/windows) network shares")
++endif ()
+ ####################
+ # BUILD OPTIONS
+ ####################
+ 
++# libsmb2 (network roms loading from smb:// paths)
++if (OPTION_SMB)
++    if (PLATFORM_PS4)
++        # libsmb2 enables its PS4 compat layer (PS4_PLATFORM) when PS4 is set
++        set(PS4 ON CACHE BOOL "" FORCE)
++    endif ()
++    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
++    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
++    set(ENABLE_UTILS OFF CACHE BOOL "" FORCE)
++    set(ENABLE_LIBKRB5 OFF CACHE BOOL "" FORCE)
++    set(ENABLE_GSSAPI OFF CACHE BOOL "" FORCE)
++    set(ENABLE_LIBDCERPC OFF CACHE BOOL "" FORCE)
++    add_subdirectory(external/libsmb2 EXCLUDE_FROM_ALL)
++endif ()
++
+ # linux/windows screen handling options
+ if (PLATFORM_LINUX OR PLATFORM_WINDOWS)
+     set(OPTION_RESOLUTION ON CACHE BOOL "Add screen resolution option")
+diff --git a/SMB.md b/SMB.md
+new file mode 100644
+index 0000000..c40626d
+--- /dev/null
++++ b/SMB.md
+@@ -0,0 +1,83 @@
++# Network roms (SMB / Samba / Windows shares)
++
++pSNES can list and launch roms stored on a network share (Windows shared folder,
++Samba server, NAS). Roms are downloaded to a local cache when you launch them, so
++the emulator core always reads a normal local file.
++
++## Setup
++
++1. Share a folder on your PC or NAS (SMB2 or SMB3).
++2. Launch pSNES once so it creates its config file (`/data/psnes/config.cfg` on PS4).
++3. Add one line per network folder to the `ROMS` section of the config file:
++
++```
++PSNES :
++{
++  ROMS :
++  {
++    SNES = ( "Super Nintendo", "0x00000004", "/data/psnes/roms/" );
++    SNES_NAS = ( "Super Nintendo", "0x00000004", "smb://192.168.1.20/roms/snes/" );
++  };
++  ...
++```
++
++The first value is the system name, the second the system id (`0x00000004` for
++Super Nintendo), the third the rom path. Each line needs a unique name
++(`SNES_NAS`, `SNES_PC`...).
++
++## URL format
++
++```
++smb://[domain;][user[:password]@]server[:port]/share/path/
++```
++
++| Example | Meaning |
++|---|---|
++| `smb://192.168.1.20/roms/snes/` | guest access |
++| `smb://bob:mypassword@nas/games/SNES/` | user + password |
++| `smb://WORKGROUP;bob:pw@nas:445/roms/` | with domain and port |
++| `smb://nas/My%20Roms/Super%20Nintendo/` | spaces in share or folder names |
++
++Special characters in the user name or password must be percent-encoded:
++`@` → `%40`, `/` → `%2F`, `:` → `%3A`, `%` → `%25`, `;` → `%3B`.
++
++The password is stored in plain text in the config file. Use a dedicated,
++read-only account on your share.
++
++## How it works
++
++- **Listing:** at startup each `smb://` path is listed directly from the share
++  (sub-folders are not scanned). Supported extensions are the usual pSNES ones
++  (`.sfc`, `.smc`, `.zip`, ...).
++- **gamelist.xml:** if the remote folder contains a `gamelist.xml`
++  (EmulationStation format), names, genres and dates come from it.
++- **Launching:** the rom is downloaded to `/data/psnes/cache/smb/<server>_<share>_<path>/`
++  with a progress bar. If the cached copy has the same size as the remote file,
++  it is used directly without downloading again.
++- **Offline:** if the server is unreachable at startup, roms that were already
++  downloaded still appear in the list and can be played.
++- **Saves:** SRAM, save states and per-game configs are stored locally
++  (`/data/psnes/sram`, `saves`, `configs`), named after the rom file, exactly as
++  for local roms.
++- **Cache size:** the cache is never cleaned automatically. Delete
++  `/data/psnes/cache/smb/` (via FTP) to free space.
++
++## Not supported yet
++
++- Box art / video snaps (`media/` folder) from the share.
++- Browsing sub-folders.
++- Other pEMU emulators (the code lives in the shared UI, but each core still
++  needs the 20-line hook from `psnes_ui_emu.cpp`).
++
++## Building
++
++`OPTION_SMB` is `ON` by default for PS4 and Linux. libsmb2 is a git submodule
++(`external/libsmb2`) and is built automatically; its own PS4 compatibility layer
++is enabled when `PLATFORM_PS4=ON`.
++
++```
++git submodule update --init external/libsmb2
++mkdir cmake-build && cd cmake-build
++cmake -G "Unix Makefiles" -DPLATFORM_PS4=ON -DCMAKE_BUILD_TYPE=Release ..
++make psnes_pkg
++```
+diff --git a/src/cores/psnes/sources/psnes_config.cpp b/src/cores/psnes/sources/psnes_config.cpp
+index 1fd0f83..98317ea 100644
+--- a/src/cores/psnes/sources/psnes_config.cpp
++++ b/src/cores/psnes/sources/psnes_config.cpp
+@@ -50,6 +50,8 @@ PSNESConfig::PSNESConfig(Renderer *renderer, int version) : PEMUConfig(renderer,
+     // create roms paths if needed
+     const auto paths = getRomPaths();
+     for (const auto &path: paths) {
++        // network paths (smb://) are not local directories
++        if (Utility::startWith(Utility::toLower(path.path), "smb://")) continue;
+         io->create(path.path);
+     }
+ }
+diff --git a/src/cores/psnes/sources/psnes_ui_emu.cpp b/src/cores/psnes/sources/psnes_ui_emu.cpp
+index 81ebd23..187378f 100644
+--- a/src/cores/psnes/sources/psnes_ui_emu.cpp
++++ b/src/cores/psnes/sources/psnes_ui_emu.cpp
+@@ -157,6 +157,30 @@ int PSNESUiEmu::load(const ss_api::Game &game) {
+     uint32 saved_flags = CPU.Flags;
+ 
+     std::string fullPath = game.romsPath + game.path;
++#ifdef __SMB__
++    if (SmbIo::isSmbPath(game.romsPath)) {
++        // network rom: download it to the local cache, then load it as a regular file
++        pMain->getUiProgressBox()->setMessage("Downloading...");
++        pMain->flip();
++        std::string error;
++        const std::string cacheDir = SmbIo::getCacheDir(
++                pMain->getUiRomList()->getRomList()->getSmbCachePath(), game.romsPath);
++        fullPath = SmbIo::fetchToCache(game.romsPath, game.path, cacheDir,
++                                       [this](uint64_t done, uint64_t total) {
++                                           const float p = total > 0 ? (float) done / (float) total : 1.0f;
++                                           pMain->getUiProgressBox()->setProgress(p * 0.9f);
++                                           pMain->flip();
++                                           return true;
++                                       }, &error);
++        if (fullPath.empty()) {
++            pMain->getUiProgressBox()->setVisibility(Visibility::Hidden);
++            pMain->getUiMessageBox()->show("NETWORK ERROR", error.empty() ? "DOWNLOAD FAILED" : error, "OK");
++            stop();
++            return -1;
++        }
++        pMain->getUiProgressBox()->setMessage("Please wait...");
++    }
++#endif
+     printf("Memory.LoadROM: %s\n", fullPath.c_str());
+     if (!Memory.LoadROM(fullPath.c_str())) {
+         printf("Could not open ROM: %s\n", fullPath.c_str());
+diff --git a/src/skeleton/CMakeLists.txt b/src/skeleton/CMakeLists.txt
+index 3d0d77e..d219383 100644
+--- a/src/skeleton/CMakeLists.txt
++++ b/src/skeleton/CMakeLists.txt
+@@ -54,6 +54,12 @@ else ()
+     list(APPEND FLAGS -DIOAPI_NO_64 -DUSE_FILE32API)
+ endif ()
+ 
++if (OPTION_SMB)
++    list(APPEND FLAGS -D__SMB__)
++    list(APPEND CROSS2DUI_INCLUDE ${CMAKE_SOURCE_DIR}/external/libsmb2/include)
++    list(APPEND LDFLAGS smb2)
++endif ()
++
+ if (PLATFORM_LINUX OR PLATFORM_WINDOWS)
+     set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+     find_package(Threads REQUIRED)
+diff --git a/src/skeleton/pemu.h b/src/skeleton/pemu.h
+index 90bea3d..511c1c5 100644
+--- a/src/skeleton/pemu.h
++++ b/src/skeleton/pemu.h
+@@ -15,6 +15,10 @@
+ 
+ #endif
+ 
++#ifdef __SMB__
++#include "smb_io.h"
++#endif
++
+ #include "romlist.h"
+ #include "skin.h"
+ #include "ui_video.h"
+diff --git a/src/skeleton/romlist.cpp b/src/skeleton/romlist.cpp
+index 6d75adc..c37adb6 100644
+--- a/src/skeleton/romlist.cpp
++++ b/src/skeleton/romlist.cpp
+@@ -61,6 +61,15 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
+ 
+     auto romPaths = cfg->getRomPaths();
+     for (const auto &p: romPaths) {
++        if (Utility::startWith(Utility::toLower(p.path), "smb://")) {
++#ifdef __SMB__
++            appendSmb(p.path, p.system);
++#else
++            printf("RomList::build: skipping %s (built without smb support)\n", p.path.c_str());
++#endif
++            continue;
++        }
++
+         std::string gameListPath = p.path + "gamelist.xml";
+         gameList->append(gameListPath, p.path, false, filters, p.system, false, [this](Game *game) {
+             if (p_cb) p_cb(game);
+@@ -155,6 +164,105 @@ void RomList::setLoadingText(const char *format, ...) {
+     ui->flip();
+ }
+ 
++std::string RomList::getSmbCachePath() {
++    return ui->getIo()->getDataPath() + "cache/smb/";
++}
++
++#ifdef __SMB__
++
++void RomList::appendSmb(const std::string &path, const System &system) {
++    const std::string display = SmbIo::toDisplayUrl(path);
++    setLoadingText("Connecting to %s...", display.c_str());
++
++    // list everything once, then split roms and gamelist.xml
++    std::vector<SmbIo::File> remote;
++    std::string error;
++    if (!SmbIo::listFiles(path, {}, &remote, &error)) {
++        printf("RomList::appendSmb: %s: %s\n", display.c_str(), error.c_str());
++        setLoadingText("SMB error: %s", error.c_str());
++        ui->delay(2000);
++
++        // server unreachable: show what was already downloaded (playable offline)
++        const auto cached = ui->getIo()->getDirList(SmbIo::getCacheDir(getSmbCachePath(), path));
++        for (const auto &f: cached) {
++            if (f.type == c2d::Io::Type::File && !Utility::endsWith(f.name, ".part")) {
++                remote.push_back({f.name, f.size});
++            }
++        }
++        if (remote.empty()) return;
++        printf("RomList::appendSmb: offline, using %zu cached files\n", remote.size());
++    }
++
++    std::vector<std::string> roms;
++    bool hasGameList = false;
++    for (const auto &f: remote) {
++        if (Utility::toLower(f.name) == "gamelist.xml") {
++            hasGameList = true;
++        } else if (SmbIo::matchExt(f.name, filters)) {
++            roms.push_back(f.name);
++        }
++    }
++
++    auto onGameAdded = [this](Game *game) {
++        if (p_cb) p_cb(game);
++        m_games_count++;
++        if (game->available) m_games_available_count++;
++        if (!(m_games_count % 200)) {
++            setLoadingText("Games: %li / %li", m_games_available_count, m_games_count);
++        }
++    };
++
++    gameList->romPaths.emplace_back(path);
++
++    // remote gamelist.xml gives names, genres, dates... (cached locally, refreshed when it changes)
++    if (hasGameList) {
++        const std::string localXml = SmbIo::fetchToCache(
++                path, "gamelist.xml", SmbIo::getCacheDir(getSmbCachePath(), path), nullptr, &error);
++        if (!localXml.empty()) {
++            const size_t start = gameList->games.size();
++            // empty roms path: sscrap must not try to list the remote directory itself
++            gameList->append(localXml, "", false, filters, system, false, nullptr);
++            for (size_t i = start; i < gameList->games.size(); i++) {
++                Game &g = gameList->games[i];
++                g.romsPath = path;
++                // gamelist.xml entries without a screenscraper id: the ui needs an id
++                // for rom info, favorites and per-rom options
++                if (g.id == 0) g.id = std::hash<std::string>()(path + "/" + g.path);
++                auto it = std::find(roms.begin(), roms.end(), g.path);
++                g.available = it != roms.end();
++                if (g.available) roms.erase(it);
++                onGameAdded(&g);
++            }
++        }
++    }
++
++    // roms not in gamelist.xml (same as sscrap "unknown" files)
++    for (const auto &name: roms) {
++        Game game;
++        game.id = std::hash<std::string>()(path + "/" + name);
++        game.path = name;
++        game.romsPath = path;
++        game.name = Utility::removeExt(name);
++        game.available = true;
++        game.system = system;
++        onGameAdded(&game);
++        gameList->games.emplace_back(game);
++    }
++
++    auto &systems = gameList->systemList.systems;
++    if (std::find_if(systems.begin(), systems.end(), [system](const System &s) {
++        return s.id == system.id || s.name == system.name;
++    }) == systems.end()) {
++        systems.emplace_back(system);
++    }
++
++    setLoadingText("Games: %li / %li", m_games_available_count, m_games_count);
++    printf("RomList::appendSmb: %s, %zu files (gamelist.xml: %s)\n",
++           display.c_str(), remote.size(), hasGameList ? "yes" : "no");
++}
++
++#endif
++
+ RomList::~RomList() {
+     printf("~RomList()\n");
+     delete (gameList);
+diff --git a/src/skeleton/romlist.h b/src/skeleton/romlist.h
+index 8ad9fc0..fd359ec 100644
+--- a/src/skeleton/romlist.h
++++ b/src/skeleton/romlist.h
+@@ -33,7 +33,15 @@ namespace pemu {
+         ss_api::GameList *gameListFav = nullptr;
+         ss_api::GameList::GameAddedCb p_cb = nullptr;
+ 
++        // local directory where roms from smb:// paths are cached
++        std::string getSmbCachePath();
++
+     protected:
++#ifdef __SMB__
++        // add games from an smb:// rom path (remote listing + optional remote gamelist.xml)
++        void appendSmb(const std::string &path, const ss_api::System &system);
++#endif
++
+         std::vector<std::string> filters;
+         size_t m_games_count = 0;
+         size_t m_games_available_count = 0;
+diff --git a/src/skeleton/smb_io.cpp b/src/skeleton/smb_io.cpp
+new file mode 100644
+index 0000000..b5aceec
+--- /dev/null
++++ b/src/skeleton/smb_io.cpp
+@@ -0,0 +1,357 @@
++//
++// SMB (samba / windows shares) support for pEMU
++//
++
++#ifdef __SMB__
++
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <cerrno>
++#include <cctype>
++#include <fcntl.h>
++#include <sys/stat.h>
++#include <smb2/smb2.h>
++#include <smb2/libsmb2.h>
++#include "smb_io.h"
++
++using namespace pemu;
++
++#define SMB_TIMEOUT_SECONDS 10
++#define SMB_MAX_CHUNK (1024 * 1024)
++
++static std::string lower(std::string s) {
++    for (auto &c: s) c = (char) tolower((unsigned char) c);
++    return s;
++}
++
++static std::string trimSlashes(const std::string &s) {
++    size_t a = s.find_first_not_of('/');
++    if (a == std::string::npos) return "";
++    size_t b = s.find_last_not_of('/');
++    return s.substr(a, b - a + 1);
++}
++
++static std::string percentDecode(const std::string &s) {
++    std::string out;
++    out.reserve(s.size());
++    for (size_t i = 0; i < s.size(); i++) {
++        if (s[i] == '%' && i + 2 < s.size()
++            && isxdigit((unsigned char) s[i + 1]) && isxdigit((unsigned char) s[i + 2])) {
++            out += (char) strtol(s.substr(i + 1, 2).c_str(), nullptr, 16);
++            i += 2;
++        } else {
++            out += s[i];
++        }
++    }
++    return out;
++}
++
++static bool mkdirs(const std::string &path) {
++    std::string cur;
++    for (size_t i = 0; i < path.size(); i++) {
++        cur += path[i];
++        if ((path[i] == '/' || i == path.size() - 1) && cur.size() > 1) {
++            if (mkdir(cur.c_str(), 0777) != 0 && errno != EEXIST) {
++                struct stat st{};
++                if (stat(cur.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) return false;
++            }
++        }
++    }
++    return true;
++}
++
++static void setError(std::string *error, const std::string &msg) {
++    printf("SmbIo: %s\n", msg.c_str());
++    if (error) *error = msg;
++}
++
++// connect to url.server/url.share, returns nullptr on error
++static smb2_context *smbConnect(const SmbIo::Url &url, std::string *error) {
++    smb2_context *smb2 = smb2_init_context();
++    if (!smb2) {
++        setError(error, "could not create smb2 context");
++        return nullptr;
++    }
++
++    smb2_set_timeout(smb2, SMB_TIMEOUT_SECONDS);
++
++    // libsmb2 falls back to the current unix user when no user is given,
++    // which doesn't exist on consoles: default to "guest"
++    const std::string user = url.user.empty() ? "guest" : url.user;
++    smb2_set_user(smb2, user.c_str());
++    // NOTE: only set a password when we have one. With an empty password set,
++    // libsmb2 signs guest sessions with an invalid key and servers reject them
++    // (STATUS_ACCESS_DENIED on tree connect).
++    if (!url.password.empty()) {
++        smb2_set_password(smb2, url.password.c_str());
++    }
++    if (!url.domain.empty()) {
++        smb2_set_domain(smb2, url.domain.c_str());
++    }
++
++    if (smb2_connect_share(smb2, url.server.c_str(), url.share.c_str(), user.c_str()) < 0) {
++        setError(error, "connection to \\\\" + url.server + "\\" + url.share
++                        + " failed: " + smb2_get_error(smb2));
++        smb2_destroy_context(smb2);
++        return nullptr;
++    }
++
++    return smb2;
++}
++
++static void smbDisconnect(smb2_context *smb2) {
++    if (!smb2) return;
++    smb2_disconnect_share(smb2);
++    smb2_destroy_context(smb2);
++}
++
++bool SmbIo::isSmbPath(const std::string &path) {
++    return path.size() > 6 && lower(path.substr(0, 6)) == "smb://";
++}
++
++bool SmbIo::parseUrl(const std::string &url, Url *out) {
++    if (!isSmbPath(url) || !out) return false;
++
++    *out = Url();
++    std::string rest = url.substr(6);
++
++    // "[credentials@]server" ends at the first '/'. Special characters in
++    // credentials ('/', '@', ':', ...) must be percent-encoded (%2F, %40, %3A).
++    // '@' in the share/path part (rom file names) is allowed as-is.
++    const size_t slash = rest.find('/');
++    if (slash == std::string::npos) return false;
++    const std::string head = rest.substr(0, slash);
++    const size_t at = head.rfind('@');
++
++    std::string authority = at != std::string::npos ? head.substr(0, at) : "";
++    std::string hostAndPath = (at != std::string::npos ? head.substr(at + 1) : head) + rest.substr(slash);
++
++    if (!authority.empty()) {
++        // [domain;]user[:password]
++        size_t semi = authority.find(';');
++        if (semi != std::string::npos) {
++            out->domain = percentDecode(authority.substr(0, semi));
++            authority = authority.substr(semi + 1);
++        }
++        size_t colon = authority.find(':');
++        if (colon != std::string::npos) {
++            out->user = percentDecode(authority.substr(0, colon));
++            out->password = percentDecode(authority.substr(colon + 1));
++        } else {
++            out->user = percentDecode(authority);
++        }
++    }
++
++    size_t s = hostAndPath.find('/');
++    if (s == std::string::npos || s == 0) return false;
++    out->server = hostAndPath.substr(0, s);
++
++    std::string sharePath = trimSlashes(hostAndPath.substr(s + 1));
++    if (sharePath.empty()) return false;
++    size_t s2 = sharePath.find('/');
++    if (s2 == std::string::npos) {
++        out->share = percentDecode(sharePath);
++    } else {
++        out->share = percentDecode(sharePath.substr(0, s2));
++        out->path = percentDecode(trimSlashes(sharePath.substr(s2 + 1)));
++    }
++
++    return !out->server.empty() && !out->share.empty();
++}
++
++bool SmbIo::matchExt(const std::string &name, const std::vector<std::string> &filters) {
++    if (filters.empty()) return true;
++    const std::string ln = lower(name);
++    for (const auto &f: filters) {
++        const std::string e = lower(f);
++        if (ln.size() >= e.size() && ln.compare(ln.size() - e.size(), e.size(), e) == 0) {
++            return true;
++        }
++    }
++    return false;
++}
++
++std::string SmbIo::toDisplayUrl(const std::string &url) {
++    Url u;
++    if (!parseUrl(url, &u)) return url;
++    std::string res = "smb://";
++    if (!u.domain.empty()) res += u.domain + ";";
++    if (!u.user.empty()) res += u.user + "@";
++    res += u.server + "/" + u.share;
++    if (!u.path.empty()) res += "/" + u.path;
++    return res;
++}
++
++bool SmbIo::listFiles(const std::string &dirUrl, const std::vector<std::string> &filters,
++                      std::vector<File> *out, std::string *error) {
++    Url url;
++    if (!parseUrl(dirUrl, &url)) {
++        setError(error, "invalid smb url: " + toDisplayUrl(dirUrl));
++        return false;
++    }
++
++    smb2_context *smb2 = smbConnect(url, error);
++    if (!smb2) return false;
++
++    smb2dir *dir = smb2_opendir(smb2, url.path.c_str());
++    if (!dir) {
++        setError(error, "could not open directory \"" + url.path + "\": " + smb2_get_error(smb2));
++        smbDisconnect(smb2);
++        return false;
++    }
++
++    smb2dirent *ent;
++    while ((ent = smb2_readdir(smb2, dir))) {
++        if (!ent->name || ent->name[0] == '.') continue;
++        if (ent->st.smb2_type != SMB2_TYPE_FILE) continue;
++        if (!matchExt(ent->name, filters)) continue;
++        if (out) out->push_back({ent->name, ent->st.smb2_size});
++    }
++
++    smb2_closedir(smb2, dir);
++    smbDisconnect(smb2);
++    return true;
++}
++
++static bool downloadWith(smb2_context *smb2, const std::string &remotePath, const std::string &localPath,
++                         uint64_t *remoteSize, const SmbIo::ProgressCb &progress, std::string *error) {
++    smb2fh *fh = smb2_open(smb2, remotePath.c_str(), O_RDONLY);
++    if (!fh) {
++        setError(error, "could not open \"" + remotePath + "\": " + smb2_get_error(smb2));
++        return false;
++    }
++
++    smb2_stat_64 st{};
++    if (smb2_fstat(smb2, fh, &st) < 0) {
++        setError(error, "could not stat \"" + remotePath + "\": " + smb2_get_error(smb2));
++        smb2_close(smb2, fh);
++        return false;
++    }
++    if (remoteSize) *remoteSize = st.smb2_size;
++
++    const std::string partPath = localPath + ".part";
++    FILE *fp = fopen(partPath.c_str(), "wb");
++    if (!fp) {
++        setError(error, "could not create \"" + partPath + "\": " + strerror(errno));
++        smb2_close(smb2, fh);
++        return false;
++    }
++
++    uint32_t chunk = smb2_get_max_read_size(smb2);
++    if (chunk == 0 || chunk > SMB_MAX_CHUNK) chunk = SMB_MAX_CHUNK;
++    auto *buf = new uint8_t[chunk];
++
++    bool ok = true;
++    uint64_t done = 0;
++    if (progress && !progress(0, st.smb2_size)) ok = false;
++    while (ok && done < st.smb2_size) {
++        int count = smb2_read(smb2, fh, buf, chunk);
++        if (count < 0) {
++            setError(error, "read error on \"" + remotePath + "\": " + smb2_get_error(smb2));
++            ok = false;
++            break;
++        }
++        if (count == 0) break;
++        if (fwrite(buf, 1, (size_t) count, fp) != (size_t) count) {
++            setError(error, "write error on \"" + partPath + "\": " + strerror(errno));
++            ok = false;
++            break;
++        }
++        done += (uint64_t) count;
++        if (progress && !progress(done, st.smb2_size)) {
++            setError(error, "download cancelled");
++            ok = false;
++        }
++    }
++
++    delete[] buf;
++    fclose(fp);
++    smb2_close(smb2, fh);
++
++    if (ok && done != st.smb2_size) {
++        setError(error, "short read on \"" + remotePath + "\"");
++        ok = false;
++    }
++
++    if (!ok) {
++        remove(partPath.c_str());
++        return false;
++    }
++
++    remove(localPath.c_str());
++    if (rename(partPath.c_str(), localPath.c_str()) != 0) {
++        setError(error, "could not rename \"" + partPath + "\": " + strerror(errno));
++        remove(partPath.c_str());
++        return false;
++    }
++
++    return true;
++}
++
++std::string SmbIo::getCacheDir(const std::string &baseCacheDir, const std::string &dirUrl) {
++    Url url;
++    std::string key;
++    if (parseUrl(dirUrl, &url)) {
++        key = url.server + "_" + url.share + (url.path.empty() ? "" : "_" + url.path);
++    } else {
++        key = dirUrl;
++    }
++
++    for (auto &c: key) {
++        if (!isalnum((unsigned char) c) && c != '-' && c != '.') c = '_';
++    }
++
++    std::string base = baseCacheDir;
++    if (!base.empty() && base.back() != '/') base += "/";
++    return base + key + "/";
++}
++
++std::string SmbIo::fetchToCache(const std::string &dirUrl, const std::string &fileName,
++                                const std::string &cacheDir,
++                                const ProgressCb &progress, std::string *error) {
++    Url url;
++    if (!parseUrl(dirUrl, &url) || fileName.empty()) {
++        setError(error, "invalid smb url: " + toDisplayUrl(dirUrl));
++        return "";
++    }
++    const std::string remotePath = url.path.empty() ? fileName : url.path + "/" + fileName;
++
++    std::string dir = cacheDir;
++    if (!dir.empty() && dir.back() != '/') dir += "/";
++    if (!mkdirs(dir)) {
++        setError(error, "could not create cache directory \"" + dir + "\"");
++        return "";
++    }
++    const std::string localPath = dir + fileName;
++
++    smb2_context *smb2 = smbConnect(url, error);
++    if (!smb2) {
++        // offline: fall back to a previously cached copy if we have one
++        struct stat lst{};
++        if (stat(localPath.c_str(), &lst) == 0 && lst.st_size > 0) {
++            printf("SmbIo::fetchToCache: server unreachable, using cached %s\n", localPath.c_str());
++            return localPath;
++        }
++        return "";
++    }
++
++    // reuse cached copy when sizes match
++    smb2_stat_64 rst{};
++    struct stat lst{};
++    if (smb2_stat(smb2, remotePath.c_str(), &rst) == 0
++        && stat(localPath.c_str(), &lst) == 0
++        && (uint64_t) lst.st_size == rst.smb2_size) {
++        printf("SmbIo::fetchToCache: cache hit %s\n", localPath.c_str());
++        smbDisconnect(smb2);
++        return localPath;
++    }
++
++    printf("SmbIo::fetchToCache: downloading %s/%s -> %s\n",
++           toDisplayUrl(dirUrl).c_str(), fileName.c_str(), localPath.c_str());
++    bool ok = downloadWith(smb2, remotePath, localPath, nullptr, progress, error);
++    smbDisconnect(smb2);
++    return ok ? localPath : "";
++}
++
++#endif // __SMB__
+diff --git a/src/skeleton/smb_io.h b/src/skeleton/smb_io.h
+new file mode 100644
+index 0000000..9cb6689
+--- /dev/null
++++ b/src/skeleton/smb_io.h
+@@ -0,0 +1,69 @@
++//
++// SMB (samba / windows shares) support for pEMU
++//
++// Rom paths in the config file can point to a network share:
++//   smb://[domain;][user[:password]@]server[:port]/share/path/
++//
++// Remote roms are listed directly from the share, and downloaded to a local
++// cache directory when a game is launched (cores keep using plain file paths).
++//
++
++#ifndef PEMU_SMB_IO_H
++#define PEMU_SMB_IO_H
++
++#include <string>
++#include <vector>
++#include <functional>
++#include <cstdint>
++
++namespace pemu {
++    class SmbIo {
++    public:
++        struct File {
++            std::string name;
++            uint64_t size = 0;
++        };
++
++        struct Url {
++            std::string domain;
++            std::string user;
++            std::string password;
++            std::string server;   // host[:port]
++            std::string share;
++            std::string path;     // path inside the share, no leading/trailing '/'
++        };
++
++        // progress: bytes done, bytes total. Return false to cancel.
++        typedef std::function<bool(uint64_t, uint64_t)> ProgressCb;
++
++        // true if "path" is an smb:// url
++        static bool isSmbPath(const std::string &path);
++
++        // parse an smb:// url, returns false on malformed url
++        static bool parseUrl(const std::string &url, Url *out);
++
++        // true if "name" ends with one of "filters" (case insensitive, empty filters = true)
++        static bool matchExt(const std::string &name, const std::vector<std::string> &filters);
++
++        // url without the password (safe for logging / display)
++        static std::string toDisplayUrl(const std::string &url);
++
++        // list files (not directories) in "dirUrl" whose extension is in "filters" (empty = all)
++        static bool listFiles(const std::string &dirUrl, const std::vector<std::string> &filters,
++                              std::vector<File> *out, std::string *error = nullptr);
++
++        // Return a local path for the remote file "fileName" located in "dirUrl", downloading it
++        // into "cacheDir" if needed ("fileName" is a raw file name, not url encoded).
++        // A cached file is reused if its size matches the remote file size, or if the
++        // server is unreachable. The download is written to "<file>.part" then renamed.
++        // Returns an empty string on failure.
++        static std::string fetchToCache(const std::string &dirUrl, const std::string &fileName,
++                                        const std::string &cacheDir,
++                                        const ProgressCb &progress = nullptr, std::string *error = nullptr);
++
++        // local cache directory for a given remote directory url (one sub directory per remote path)
++        static std::string getCacheDir(const std::string &baseCacheDir, const std::string &dirUrl);
++    };
++}
++
++#endif //PEMU_SMB_IO_H
