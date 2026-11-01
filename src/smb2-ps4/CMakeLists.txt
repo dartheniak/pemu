@@ -1,3 +1,5 @@
+project(smb2_ps4 C)
+
 # libsmb2 static library for PS4, built without libsmb2's own CMakeLists.txt.
 #
 # libsmb2's cmake "PS4" mode replaces CMAKE_C_FLAGS with "-funwind-tables",
