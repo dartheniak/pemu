@@ -461,6 +461,7 @@ bool UiMenu::isNetworkTextOption(Option *option) {
         case PEMUConfig::OptId::NET_SMB_FOLDER:
         case PEMUConfig::OptId::NET_SMB_USER:
         case PEMUConfig::OptId::NET_SMB_PASSWORD:
+        case PEMUConfig::OptId::NET_SMB_SYSTEM_FOLDER:
             return true;
         default:
             return false;
@@ -475,7 +476,11 @@ void UiMenu::editNetworkOption(Option *option) {
             title = "Server address (example: 192.168.1.20)";
             break;
         case PEMUConfig::OptId::NET_SMB_FOLDER:
-            title = "Share and folder (example: Roms/SNES)";
+            title = "Your roms folder (example: Roms)";
+            kind = TextInput::Kind::Text;
+            break;
+        case PEMUConfig::OptId::NET_SMB_SYSTEM_FOLDER:
+            title = "Name of this console's folder (empty: automatic)";
             kind = TextInput::Kind::Text;
             break;
         case PEMUConfig::OptId::NET_SMB_USER:
@@ -534,28 +539,52 @@ void UiMenu::testConnection() {
     progress->setLayer(1000);
     ui->flip(true, false);
 
+    // same steps as the game list: find this console's folder(s), then count the games
+    const std::string system = cfg->getNetworkSystem().name;
+    const auto names = cfg->getNetworkFolderNames();
+    SmbIo::SystemFolders folders;
     std::vector<SmbIo::File> files;
     std::string error;
-    const bool ok = SmbIo::listFiles(url, cfg->getCoreSupportedExt(), &files, &error, SMB_MAX_FOLDER_DEPTH);
+    bool ok = SmbIo::findSystemFolders(url, names, &folders, &error);
+    for (size_t i = 0; ok && i < folders.urls.size(); i++) {
+        progress->setMessage("Looking for games in " + SmbIo::folderName(folders.urls[i]) + "...");
+        progress->setProgress((float) i / (float) folders.urls.size());
+        ui->flip(true, false);
+        ok = SmbIo::listFiles(folders.urls[i], cfg->getCoreSupportedExt(), &files, &error,
+                              folders.scanSubFolders ? SMB_MAX_FOLDER_DEPTH : 0);
+    }
 
     progress->setProgress(1);
     ui->flip(true, false);
     progress->setVisibility(Visibility::Hidden);
 
+    std::string where;
+    for (const auto &u: folders.urls) where += (where.empty() ? "\"" : ", \"") + SmbIo::folderName(u) + "\"";
+
     std::string message;
     if (!ok) {
         message = SmbIo::friendlyError(error, url);
+    } else if (!names.empty() && !folders.found) {
+        // show two of the names we look for
+        std::string known = "\"" + names[0] + "\"";
+        if (names.size() > 1) known += " or \"" + names.back() + "\"";
+        message = "No " + system + " folder found in \"" + SmbIo::folderName(url) + "\" (looking for names like " +
+                  known + "). Set SYSTEM_FOLDER to your folder's name.";
+        if (!files.empty()) {
+            message += " For now, the " + std::to_string(files.size()) + (files.size() == 1 ? " game" : " games") +
+                       " directly in \"" + SmbIo::folderName(url) + "\" will be used.";
+        }
     } else if (files.empty()) {
-        message = "Connected to " + display + ", but no games were found in this folder "
-                  "or its sub folders. Check the FOLDER setting.";
+        message = "Connected to " + where + ", but no games were found in it or its sub folders.";
     } else {
-        message = "Connected to " + display + ". Found " + std::to_string(files.size()) +
-                  (files.size() == 1 ? " game" : " games") + ". Restart the app to show them in the list.";
+        message = "Found " + std::to_string(files.size()) + (files.size() == 1 ? " game" : " games") +
+                  " in " + where + ". Restart the app to show them in the list.";
     }
     printf("UiMenu::testConnection: %s\n", message.c_str());
     ui->getUiMessageBox()->show(!ok ? "TEST CONNECTION: FAILED"
-                                    : files.empty() ? "TEST CONNECTION: NO GAMES" : "TEST CONNECTION: OK",
-                                message, "OK");
+                                    : files.empty() ? "TEST CONNECTION: NO GAMES"
+                                    : (!names.empty() && !folders.found) ? "TEST CONNECTION: CHECK FOLDER"
+                                    : "TEST CONNECTION: OK", message, "OK");
 #endif
 }
 

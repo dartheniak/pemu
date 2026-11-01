@@ -69,6 +69,7 @@ namespace pemu {
             NET_SMB_USER,
             NET_SMB_PASSWORD,
             NET_SMB_CLEAR_CACHE,
+            NET_SMB_SYSTEM_FOLDER,
             JOY_UP,
             JOY_DOWN,
             JOY_LEFT,
@@ -137,6 +138,14 @@ namespace pemu {
 
         // system used for games found on the network rom path (first configured rom path system)
         virtual ss_api::System getNetworkSystem();
+
+        // folder names this core's games are stored in ("snes", "Nintendo - Super Nintendo...").
+        // When the network FOLDER is a folder of several consoles ("Roms"), only its sub folders
+        // with one of these names are scanned. Empty: the FOLDER is scanned as is.
+        virtual std::vector<std::string> getCoreFolderNames() { return {}; }
+
+        // getCoreFolderNames() + the user's SYSTEM_FOLDER setting
+        std::vector<std::string> getNetworkFolderNames();
 
         std::vector<c2d::Input::ButtonMapping> getKeyboardMapping(int player, bool isGame = false);
 

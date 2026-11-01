@@ -239,6 +239,93 @@ std::string SmbIo::friendlyError(const std::string &error, const std::string &ur
     return error;
 }
 
+bool SmbIo::listDirs(const std::string &dirUrl, std::vector<std::string> *out, std::string *error) {
+    Url url;
+    if (!parseUrl(dirUrl, &url)) {
+        setError(error, "invalid smb url: " + toDisplayUrl(dirUrl));
+        return false;
+    }
+
+    smb2_context *smb2 = smbConnect(url, error);
+    if (!smb2) return false;
+
+    smb2dir *dir = smb2_opendir(smb2, url.path.c_str());
+    if (!dir) {
+        setError(error, "could not open folder \"" + url.path + "\": " + smb2_get_error(smb2));
+        smbDisconnect(smb2);
+        return false;
+    }
+
+    smb2dirent *ent;
+    while ((ent = smb2_readdir(smb2, dir))) {
+        if (!ent->name || ent->name[0] == '.' || ent->name[0] == '$') continue;
+        if (ent->st.smb2_type == SMB2_TYPE_DIRECTORY && out) out->emplace_back(ent->name);
+    }
+
+    smb2_closedir(smb2, dir);
+    smbDisconnect(smb2);
+    return true;
+}
+
+std::string SmbIo::childUrl(const std::string &dirUrl, const std::string &name) {
+    std::string url = dirUrl;
+    if (!url.empty() && url.back() != '/') url += "/";
+    return url + percentEncode(name, false) + "/";
+}
+
+std::string SmbIo::folderName(const std::string &dirUrl) {
+    Url url;
+    if (!parseUrl(dirUrl, &url)) return "";
+    if (url.path.empty()) return url.share;
+    const size_t slash = url.path.find_last_of('/');
+    return slash == std::string::npos ? url.path : url.path.substr(slash + 1);
+}
+
+static std::string folderKey(const std::string &name) {
+    std::string key;
+    for (unsigned char c: name) {
+        if (isalnum(c)) key += (char) tolower(c);
+    }
+    return key;
+}
+
+bool SmbIo::sameFolderName(const std::string &a, const std::string &b) {
+    const std::string ka = folderKey(a);
+    return !ka.empty() && ka == folderKey(b);
+}
+
+bool SmbIo::findSystemFolders(const std::string &dirUrl, const std::vector<std::string> &names,
+                              SystemFolders *out, std::string *error) {
+    SystemFolders res;
+    auto matches = [&names](const std::string &folder) {
+        for (const auto &n: names) {
+            if (sameFolderName(folder, n)) return true;
+        }
+        return false;
+    };
+
+    if (names.empty() || matches(folderName(dirUrl))) {
+        // no known names (old behaviour), or the chosen folder is the console folder itself
+        res.urls.push_back(dirUrl);
+        res.found = !names.empty();
+    } else {
+        std::vector<std::string> dirs;
+        if (!listDirs(dirUrl, &dirs, error)) return false;
+        for (const auto &d: dirs) {
+            if (matches(d)) res.urls.push_back(childUrl(dirUrl, d));
+        }
+        res.found = !res.urls.empty();
+        if (!res.found) {
+            // nothing recognized: only use the files directly in the chosen folder
+            res.urls.push_back(dirUrl);
+            res.scanSubFolders = false;
+        }
+    }
+
+    if (out) *out = res;
+    return true;
+}
+
 bool SmbIo::matchExt(const std::string &name, const std::vector<std::string> &filters) {
     if (filters.empty()) return true;
     const std::string ln = lower(name);

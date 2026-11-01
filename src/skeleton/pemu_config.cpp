@@ -94,12 +94,14 @@ PEMUConfig::PEMUConfig(Renderer *renderer, const std::string &name, int version)
     network.addOption({"SERVER", std::string(""), NET_SMB_SERVER,
                        "PC OR NAS ADDRESS (EXAMPLE: 192.168.1.20)"});
     network.addOption({"FOLDER", std::string(""), NET_SMB_FOLDER,
-                       "SHARE AND FOLDER (EXAMPLE: ROMS/SNES) - SUB FOLDERS ARE SCANNED TOO"});
+                       "YOUR ROMS FOLDER (EXAMPLE: ROMS) - THE CONSOLE'S SUB FOLDER IS FOUND BY NAME"});
     network.addOption({"USERNAME", std::string(""), NET_SMB_USER,
                        "LEAVE EMPTY FOR GUEST ACCESS"});
     network.addOption({"PASSWORD", std::string(""), NET_SMB_PASSWORD});
     network.addOption({"CLEAR_CACHE_ON_START", {"OFF", "ON"}, 1, NET_SMB_CLEAR_CACHE,
                        "ON: DELETE DOWNLOADED NETWORK GAMES WHEN THE APP STARTS"});
+    network.addOption({"SYSTEM_FOLDER", std::string(""), NET_SMB_SYSTEM_FOLDER,
+                       "OPTIONAL: NAME OF THIS CONSOLE'S FOLDER IF IT IS NOT FOUND AUTOMATICALLY"});
     addGroup(network);
 #endif
 
@@ -291,6 +293,19 @@ std::string PEMUConfig::getNetworkRomPath() {
 #else
     return "";
 #endif
+}
+
+std::vector<std::string> PEMUConfig::getNetworkFolderNames() {
+    auto names = getCoreFolderNames();
+    auto custom = get(NET_SMB_SYSTEM_FOLDER);
+    if (custom && !custom->getString().empty()) {
+        // also accept a path ("Roms/My SNES"): keep its last folder name
+        std::string name = custom->getString();
+        for (auto &c: name) if (c == '\\') c = '/';
+        while (!name.empty() && name.back() == '/') name.pop_back();
+        names.insert(names.begin(), name.substr(name.find_last_of('/') + 1));
+    }
+    return names;
 }
 
 ss_api::System PEMUConfig::getNetworkSystem() {

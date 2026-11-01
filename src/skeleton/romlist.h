@@ -39,7 +39,8 @@ namespace pemu {
     protected:
 #ifdef __SMB__
         // add games from an smb:// rom path (remote listing + optional remote gamelist.xml)
-        void appendSmb(const std::string &path, const ss_api::System &system);
+        // "maxDepth": how many levels of sub folders are scanned
+        void appendSmb(const std::string &path, const ss_api::System &system, int maxDepth);
 #endif
 
         std::vector<std::string> filters;

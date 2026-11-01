@@ -69,19 +69,33 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
         ui->getIo()->removeDir(getSmbCachePath());
     }
 
-    // network rom path from the NETWORK settings
+    // network rom path from the NETWORK settings: only this console's folder(s) inside it
     const std::string netPath = cfg->getNetworkRomPath();
     if (!netPath.empty()) {
-        bool exists = false;
-        for (const auto &p: romPaths) exists |= p.path == netPath;
-        if (!exists) romPaths.push_back({netPath, cfg->getNetworkSystem()});
+        const std::string display = SmbIo::toDisplayUrl(netPath);
+        setLoadingText("Connecting to %s...", display.c_str());
+        SmbIo::SystemFolders folders;
+        std::string error;
+        if (SmbIo::findSystemFolders(netPath, cfg->getNetworkFolderNames(), &folders, &error)) {
+            if (!folders.found && !cfg->getNetworkFolderNames().empty()) {
+                setLoadingText("Network: no %s folder found in %s, using its files only",
+                               cfg->getNetworkSystem().name.c_str(), display.c_str());
+                ui->delay(3000);
+            }
+            for (const auto &url: folders.urls) {
+                appendSmb(url, cfg->getNetworkSystem(), folders.scanSubFolders ? SMB_MAX_FOLDER_DEPTH : 0);
+            }
+        } else {
+            // unreachable: appendSmb shows the error (and cached games if any)
+            appendSmb(netPath, cfg->getNetworkSystem(), SMB_MAX_FOLDER_DEPTH);
+        }
     }
 #endif
 
     for (const auto &p: romPaths) {
         if (Utility::startWith(Utility::toLower(p.path), "smb://")) {
 #ifdef __SMB__
-            appendSmb(p.path, p.system);
+            appendSmb(p.path, p.system, SMB_MAX_FOLDER_DEPTH);
 #else
             printf("RomList::build: skipping %s (built without smb support)\n", p.path.c_str());
 #endif
@@ -188,7 +202,7 @@ std::string RomList::getSmbCachePath() {
 
 #ifdef __SMB__
 
-void RomList::appendSmb(const std::string &path, const System &system) {
+void RomList::appendSmb(const std::string &path, const System &system, int maxDepth) {
     const std::string display = SmbIo::toDisplayUrl(path);
     setLoadingText("Connecting to %s...", display.c_str());
 
@@ -197,7 +211,7 @@ void RomList::appendSmb(const std::string &path, const System &system) {
     wanted.emplace_back("gamelist.xml");
     std::vector<SmbIo::File> remote;
     std::string error;
-    bool online = SmbIo::listFiles(path, wanted, &remote, &error, SMB_MAX_FOLDER_DEPTH);
+    bool online = SmbIo::listFiles(path, wanted, &remote, &error, maxDepth);
     if (!online) {
         printf("RomList::appendSmb: %s: %s\n", display.c_str(), error.c_str());
         setLoadingText("Network: %s", SmbIo::friendlyError(error, path).c_str());

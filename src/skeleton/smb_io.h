@@ -52,6 +52,35 @@ namespace pemu {
         static std::string buildUrl(const std::string &server, const std::string &folder,
                                     const std::string &user, const std::string &password);
 
+        // names of the direct sub folders of "dirUrl"
+        static bool listDirs(const std::string &dirUrl, std::vector<std::string> *out,
+                             std::string *error = nullptr);
+
+        // url of the sub folder "name" (raw, not url encoded) of "dirUrl"
+        static std::string childUrl(const std::string &dirUrl, const std::string &name);
+
+        // last folder name of a url ("smb://host/Roms/SNES/" -> "SNES", "smb://host/Roms/" -> "Roms")
+        static std::string folderName(const std::string &dirUrl);
+
+        // folder name comparison ignoring case, spaces and punctuation:
+        // "Nintendo - Super Nintendo Entertainment System" == "nintendo super nintendo entertainment system"
+        static bool sameFolderName(const std::string &a, const std::string &b);
+
+        // Find where a console's games are, from a folder chosen by the user:
+        // - the folder itself if its name is one of "names" (it is that console's folder)
+        // - else its direct sub folders whose name is one of "names" ("Roms" -> "Roms/SNES")
+        // - else nothing: "found" is set to false and "urls" holds "dirUrl" only
+        //   (its files are then used, without scanning sub folders)
+        // "names" empty: "dirUrl" is used as is (old behaviour, sub folders scanned).
+        struct SystemFolders {
+            std::vector<std::string> urls;
+            bool found = false;     // a folder matching "names" was found
+            bool scanSubFolders = true;
+        };
+
+        static bool findSystemFolders(const std::string &dirUrl, const std::vector<std::string> &names,
+                                      SystemFolders *out, std::string *error = nullptr);
+
         // turn a libsmb2 error into a short message for the user
         static std::string friendlyError(const std::string &error, const std::string &url);
 
