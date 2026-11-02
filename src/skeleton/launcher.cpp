@@ -27,6 +27,8 @@ using namespace pemu;
 #define ARG_SELECT "--pppemu-select="
 #define ARG_SETTINGS "--pppemu-settings="
 #define ARG_SYSTEM "--pppemu-system="
+#define ARG_DEMO "--pppemu-demo="
+#define ARG_DEMO_NEXT "--pppemu-demo-next"
 #define SHARED_SETTINGS_FILE "shared_settings.cfg"
 // desktop builds only: data folder of the program to go back to (its working directory)
 #define ARG_CWD "--pppemu-cwd="
@@ -60,6 +62,15 @@ LaunchArgs pemu::parseLaunchArgs(int argc, char **argv) {
         } else if (startsWith(argv[i], ARG_SELECT)) {
             args.select = argv[i] + strlen(ARG_SELECT);
             args.pppemu = true;
+        } else if (startsWith(argv[i], ARG_DEMO_NEXT)) {
+            args.demoNext = true;
+            args.pppemu = true;
+        } else if (startsWith(argv[i], ARG_DEMO)) {
+            // "<seconds>,<sound 0/1>"
+            const char *v = argv[i] + strlen(ARG_DEMO);
+            args.demoSeconds = atoi(v);
+            const char *comma = strchr(v, ',');
+            args.demoSound = !comma || atoi(comma + 1) != 0;
         } else if (startsWith(argv[i], ARG_SYSTEM)) {
             args.system = argv[i] + strlen(ARG_SYSTEM);
         } else if (startsWith(argv[i], ARG_SETTINGS)) {
@@ -233,6 +244,9 @@ bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
             ARG_SETTINGS + settings,
             ARG_SYSTEM + ui->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString(),
     };
+    if (demo::isActive()) {
+        s_pendingArgs.push_back(ARG_DEMO + std::to_string(demo::getSeconds()) + "," + (demo::hasSound() ? "1" : "0"));
+    }
 #ifndef __PS4__
     s_pendingArgs.push_back(ARG_CWD + ui->getIo()->getDataPath());
 #endif
@@ -278,6 +292,8 @@ void pemu::returnToLauncher(const LaunchArgs &args) {
     if (!args.select.empty()) a.push_back(ARG_SELECT + args.select);
     if (!args.settings.empty()) a.push_back(ARG_SETTINGS + args.settings);
     if (!args.system.empty()) a.push_back(ARG_SYSTEM + args.system);
+    // demo mode: the time of this game is up, the launcher starts the next one
+    if (demo::isActive() && demo::isNextWanted()) a.push_back(ARG_DEMO_NEXT);
     std::string error;
     execProgram(program, a, &error);
 }

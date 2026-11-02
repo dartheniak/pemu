@@ -2,6 +2,7 @@
 // Created by cpasjuste on 22/11/16.
 //
 #include <algorithm>
+#include <ctime>
 #include "pemu.h"
 #include "launcher.h"
 #include "pemu_log.h"
@@ -272,6 +273,7 @@ void UIRomList::setVisibility(c2d::Visibility visibility, bool tweenPlay) {
     } else {
         mTimerLoadInfo.restart();
         mTimerLoadVideo.restart();
+        mIdleClock.restart();
     }
 
     RectangleShape::setVisibility(visibility, tweenPlay);
@@ -285,6 +287,15 @@ bool UIRomList::onInput(c2d::Input::Player *players) {
     }
 
     unsigned int buttons = players[0].buttons;
+    if (buttons && buttons != Input::Button::Delay) mIdleClock.restart();
+
+    // demo mode: L3 + R3
+    if ((buttons & Input::Button::LS) && (buttons & Input::Button::RS)) {
+        pMain->getInput()->clear();
+        startDemo();
+        return true;
+    }
+
     if (buttons & Input::Button::Up) {
         pListBox->up();
         pRomInfo->load();
@@ -371,6 +382,22 @@ bool UIRomList::onInput(c2d::Input::Player *players) {
 void UIRomList::onUpdate() {
     if (!isVisible() || pMain->getUiProgressBox()->isVisible()) {
         return;
+    }
+
+    // demo mode: back from another program (next game), or idle for long enough
+    if (pMain->getUiMenu()->isVisible() || pMain->getUiStateMenu()->isVisible()
+        || pMain->getUiMessageBox()->isVisible()) {
+        mIdleClock.restart();
+    } else if (mDemoPending) {
+        mDemoPending = false;
+        startDemo();
+        return;
+    } else {
+        const int idle = demo::parseDuration(pMain->getConfig()->get(PEMUConfig::OptId::DEMO_START_AFTER)->getString());
+        if (idle > 0 && mIdleClock.getElapsedTime().asSeconds() > (float) idle) {
+            startDemo();
+            return;
+        }
     }
 
     unsigned int buttons = pMain->getInput()->getButtons();
@@ -469,6 +496,82 @@ bool UIRomList::selectGame(const std::string &fullPath) {
     }
     logLine("UIRomList::selectGame: %s not in the list", hidePassword(fullPath).c_str());
     return false;
+}
+
+void UIRomList::startDemo() {
+    mIdleClock.restart();
+    auto cfg = pMain->getConfig();
+
+    // games to choose from
+    std::vector<Game> games;
+    const std::string which = cfg->get(PEMUConfig::OptId::DEMO_GAMES)->getString();
+    const auto systems = cfg->getSystems();
+    const std::vector<Game> &source = which == "CURRENT PAGE" ? mGameList.games
+                                      : which == "FAVORITES" ? pRomList->gameListFav->games
+                                      : pRomList->gameList->games;
+    for (const auto &g: source) {
+        if (!g.available || g.path.empty()) continue;
+        // "SUPER NINTENDO ONLY" (pppEmu): this program's own console only, no program switching
+        if (Utility::endsWith(which, " ONLY") && !systems.empty() && g.system.id != systems[0].system.id) continue;
+        // cd images: big downloads and a bios, not for a demo
+        const std::string lower = Utility::toLower(g.path);
+        if (Utility::endsWith(lower, ".chd") || Utility::endsWith(lower, ".cue") || Utility::endsWith(lower, ".iso")) {
+            continue;
+        }
+        games.push_back(g);
+    }
+    if (games.empty()) {
+        demo::end();
+        pMain->getUiStatusBox()->show("DEMO MODE: NO GAMES TO SHOW");
+        return;
+    }
+
+    // a random one, not the one shown last
+    static bool seeded = false;
+    if (!seeded) {
+        srand((unsigned int) time(nullptr));
+        seeded = true;
+    }
+    size_t pick = (size_t) rand() % games.size();
+    if (games.size() > 1 && games[pick].romsPath + games[pick].path == mDemoLastGame) {
+        pick = (pick + 1 + (size_t) rand() % (games.size() - 1)) % games.size();
+    }
+    const Game game = games[pick];
+    mDemoLastGame = game.romsPath + game.path;
+
+    const int seconds = demo::parseDuration(cfg->get(PEMUConfig::OptId::DEMO_TIME)->getString());
+    const bool sound = cfg->get(PEMUConfig::OptId::DEMO_SOUND)->getInteger() != 0;
+    logLine("demo: %s (%s), %i seconds", game.name.c_str(), game.system.name.c_str(), seconds);
+    demo::begin(seconds, sound);
+
+    // selected in the list: a button press during the demo comes back to it
+    selectGame(game.romsPath + game.path);
+
+    if (launchInOtherProgram(pMain, game)) {
+        // run by another program: this one closes (or an error was shown)
+        if (!pMain->done) demo::end();
+        return;
+    }
+#ifdef __MPV__
+    pRomInfo->mpvTexture->setVisibility(c2d::Visibility::Hidden);
+    pRomInfo->mpv->stop();
+#endif
+    cfg->loadGame(game);
+    pMain->getUiEmu()->load(game);
+}
+
+void UIRomList::onDemoGameDone(const Game &game) {
+    setVisibility(Visibility::Visible);
+    if (demo::isActive() && demo::isNextWanted()) {
+        demo::setNextWanted(false);
+        startDemo();
+        return;
+    }
+    // button pressed: back in the list on that game
+    demo::end();
+    selectGame(game.romsPath + game.path);
+    pMain->getInput()->clear();
+    mIdleClock.restart();
 }
 
 Artwork::Type UIRomList::getSecondArtworkType() {

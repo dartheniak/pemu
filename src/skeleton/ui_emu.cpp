@@ -27,8 +27,28 @@ void UiEmu::addAudio(c2d::Audio *_audio) {
     audio = _audio;
 }
 
+// demo mode without sound: the emulators play their sound as usual, silence is sent instead
+class SilentAudio : public C2DAudio {
+public:
+    SilentAudio(int rate, int samples, Audio::C2DAudioCallback cb) : C2DAudio(rate, samples, cb) {}
+
+    void play(const void *data, int samples, SyncMode syncMode) override {
+        const size_t count = (size_t) samples * (size_t) getChannels();
+        if (silence.size() < count) silence.resize(count, 0);
+        C2DAudio::play(silence.data(), samples, syncMode);
+    }
+
+private:
+    std::vector<int16_t> silence;
+};
+
 void UiEmu::addAudio(int rate, int samples, Audio::C2DAudioCallback cb) {
-    auto *aud = new C2DAudio(rate, samples, cb);
+    c2d::Audio *aud;
+    if (demo::isActive() && !demo::hasSound()) {
+        aud = new SilentAudio(rate, samples, cb);
+    } else {
+        aud = new C2DAudio(rate, samples, cb);
+    }
     addAudio(aud);
 }
 
@@ -50,7 +70,12 @@ void UiEmu::addVideo(uint8_t **pixels, int *pitch,
 int UiEmu::load(const Game &game) {
     printf("UiEmu::load: name: %s, path: %s\n",
            game.path.c_str(), game.romsPath.c_str());
-    pMain->getUiStatusBox()->show("TIPS: PRESS MENU1 + MENU2 BUTTONS FOR IN GAME MENU...");
+    if (demo::isActive()) {
+        mDemoClock.restart();
+        pMain->getUiStatusBox()->show("DEMO MODE: PRESS ANY BUTTON TO PLAY");
+    } else {
+        pMain->getUiStatusBox()->show("TIPS: PRESS MENU1 + MENU2 BUTTONS FOR IN GAME MENU...");
+    }
     currentGame = game;
 
     // set fps text on top
@@ -133,6 +158,16 @@ bool UiEmu::onInput(c2d::Input::Player *players) {
         return C2DObject::onInput(players);
     }
 
+    // demo mode: any button ends it (after a short delay: the buttons that started it may
+    // still be held), the game gets no input
+    if (demo::isActive()) {
+        const unsigned int buttons = players[0].buttons & ~(Input::Button::Delay | Input::Button::Touch);
+        if (buttons && isVisible() && mDemoClock.getElapsedTime().asSeconds() > 1.5f) {
+            stopDemo(false);
+        }
+        return true;
+    }
+
     // look for player 1 menu combo
     if (((players[0].buttons & Input::Button::Menu1) && (players[0].buttons & Input::Button::Menu2))) {
         pause();
@@ -144,8 +179,30 @@ bool UiEmu::onInput(c2d::Input::Player *players) {
     return C2DObject::onInput(players);
 }
 
+void UiEmu::stopDemo(bool next) {
+    printf("UiEmu::stopDemo(%s)\n", next ? "next game" : "button pressed");
+    // this game's list entry: selected again in the launcher's list
+    const Game game = currentGame;
+    if (next) demo::setNextWanted(true);
+    // stopped while the demo is still on: the emulators don't write the game's saves
+    stop();
+    if (!next) demo::end();
+    if (!mExitOnStop) {
+        // game run by the launcher itself: back in the list, or the next demo game
+        pMain->getUiRomList()->onDemoGameDone(game);
+    }
+    // else: started by the launcher, stop() closes this program, main() goes back to it
+}
+
 void UiEmu::onUpdate() {
     C2DObject::onUpdate();
+
+    // demo mode: time is up, next game
+    if (demo::isActive() && isVisible() && !paused
+        && mDemoClock.getElapsedTime().asSeconds() > (float) demo::getSeconds()) {
+        stopDemo(true);
+        return;
+    }
 
     if (!isPaused()) {
         // fps

@@ -100,8 +100,11 @@ int PGENUiEmu::load(const ss_api::Game &game) {
 }
 
 void PGENUiEmu::stop() {
-    saveBram();
-    saveSram();
+    // pppEmu demo mode: the game's saves are never written
+    if (!demo::isActive()) {
+        saveBram();
+        saveSram();
+    }
     audio_shutdown();
     UiEmu::stop();
 }

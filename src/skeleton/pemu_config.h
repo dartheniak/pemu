@@ -22,7 +22,8 @@ namespace pemu {
             GAMEPAD,
             KEYBOARD,
             NETWORK,
-            ARTWORK
+            ARTWORK,
+            DEMO
         };
 
         enum OptId {
@@ -73,6 +74,10 @@ namespace pemu {
             NET_SMB_SYSTEM_FOLDER,
             ART_IMAGE_TYPE,
             ART_AUTO_DOWNLOAD,
+            DEMO_START_AFTER,
+            DEMO_TIME,
+            DEMO_GAMES,
+            DEMO_SOUND,
             JOY_UP,
             JOY_DOWN,
             JOY_LEFT,

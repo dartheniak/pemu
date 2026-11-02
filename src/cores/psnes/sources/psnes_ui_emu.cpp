@@ -227,7 +227,10 @@ int PSNESUiEmu::load(const ss_api::Game &game) {
 void PSNESUiEmu::stop() {
     Settings.StopEmulation = TRUE;
 
-    Memory.SaveSRAM(S9xGetFilename(".srm", SRAM_DIR).c_str());
+    // pppEmu demo mode: the game's save is never written
+    if (!demo::isActive()) {
+        Memory.SaveSRAM(S9xGetFilename(".srm", SRAM_DIR).c_str());
+    }
 
     S9xUnmapAllControls();
     S9xGraphicsDeinit();

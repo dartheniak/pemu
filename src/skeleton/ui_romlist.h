@@ -34,6 +34,15 @@ namespace pemu {
         // select the game "romsPath + path" in the list, false if it's not there
         bool selectGame(const std::string &fullPath);
 
+        // demo mode (see demo.h): start a random game now
+        void startDemo();
+
+        // demo mode: start a random game as soon as the list is shown (back from another program)
+        void startDemoLater() { mDemoPending = true; }
+
+        // demo mode: a game run by this program is over (button pressed, or next game wanted)
+        void onDemoGameDone(const ss_api::Game &game);
+
         // image type chosen in the ARTWORK menu
         Artwork::Type getArtworkType();
 
@@ -69,6 +78,11 @@ namespace pemu {
         ss_api::GameList mGameList;
         bool mShowSystemText = false;
         bool mArtworkDbChecked = false;
+
+        // demo mode: idle time in the list, game shown last, start requested
+        c2d::C2DClock mIdleClock;
+        std::string mDemoLastGame;
+        bool mDemoPending = false;
 
         // per console background ("background_mega_drive.jpg" in the skin folder), shown
         // instead of the skin's own background when that console is selected (L2 / R2)

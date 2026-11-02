@@ -61,6 +61,11 @@ PSNESConfig::PSNESConfig(Renderer *renderer, int version) : PEMUConfig(renderer,
     // no need for auto-scaling mode
     getOption(EMU_SCALING_MODE)->setArray({"ASPECT", "INTEGER"}, 0);
 
+#if defined(PPPEMU_GENESIS_PROGRAM) || defined(PPPEMU_NES_PROGRAM) || defined(PPPEMU_GBA_PROGRAM)
+    // pppEmu demo mode: also "super nintendo games only" (they run here: no program switching)
+    getOption(DEMO_GAMES)->setArray({"ALL", "CURRENT PAGE", "FAVORITES", "SUPER NINTENDO ONLY"}, 0);
+#endif
+
     // "romlist.cpp" (RomList::build) will also reload config, but we need new roms paths
     PEMUConfig::load();
 

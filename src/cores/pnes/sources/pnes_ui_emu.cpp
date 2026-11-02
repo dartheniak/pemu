@@ -64,8 +64,16 @@ int PNESUiEmu::load(const ss_api::Game &game) {
 void PNESUiEmu::stop() {
     nst_pause();
 
+    // pppEmu demo mode: the game's battery save goes to a throwaway file, deleted after
+    std::string demoSave;
+    if (demo::isActive()) {
+        demoSave = pMain->getIo()->getDataPath() + "demo.sav";
+        snprintf(nstpaths.savename, sizeof(nstpaths.savename), "%s", demoSave.c_str());
+    }
+
     // Remove the cartridge and shut down the NES
     nst_unload();
+    if (!demoSave.empty()) ::remove(demoSave.c_str());
 
     // Unload the FDS BIOS, NstDatabase.xml, and the custom palette
     nst_db_unload();

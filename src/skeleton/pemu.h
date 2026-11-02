@@ -20,6 +20,7 @@
 #endif
 
 #include "pemu_config.h"
+#include "demo.h"
 #include "artwork.h"
 #include "romlist.h"
 #include "skin.h"

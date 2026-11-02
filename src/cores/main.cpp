@@ -101,6 +101,8 @@ int main(int argc, char **argv) {
         uiRomList->setGames({game});
         cfg->loadGame(game);
         uiEmu->setExitOnStop(true);
+        // pppEmu demo mode: shown for a while, no saves written (see skeleton/demo.h)
+        if (launchArgs.demoSeconds > 0) demo::begin(launchArgs.demoSeconds, launchArgs.demoSound);
         uiEmu->load(game);
     }
 
@@ -126,6 +128,8 @@ int main(int argc, char **argv) {
             }
         }
         uiRomList->selectGame(launchArgs.select);
+        // demo mode: the previous game's time is up, next one
+        if (launchArgs.demoNext) uiRomList->startDemoLater();
     }
 
     pemu::logLine("main: ui ready, screen %ix%i", (int) pemu_ui->getSize().x, (int) pemu_ui->getSize().y);

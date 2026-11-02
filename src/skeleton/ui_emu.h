@@ -60,6 +60,12 @@ namespace pemu {
         float targetFps = 60;
         bool paused = true;
         bool mExitOnStop = false;
+
+        // demo mode (see demo.h): time the current demo game started
+        c2d::C2DClock mDemoClock;
+
+        // demo mode: end it (button pressed) or go to the next game (time is up)
+        void stopDemo(bool next);
     };
 }
 

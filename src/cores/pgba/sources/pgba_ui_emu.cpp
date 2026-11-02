@@ -162,8 +162,13 @@ int PGBAUiEmu::load(const ss_api::Game &game) {
     // let's go
     s_core->reset(s_core);
 
-    // load save if any
-    mCoreAutoloadSave(s_core);
+    // load save if any. pppEmu demo mode: an empty save in memory, the game's save file
+    // is not opened (mGBA writes saves to the file as soon as the game saves)
+    if (demo::isActive()) {
+        s_core->loadSave(s_core, VFileMemChunk(nullptr, 0));
+    } else {
+        mCoreAutoloadSave(s_core);
+    }
     mCoreAutoloadCheats(s_core);
     mCoreAutoloadPatch(s_core);
 

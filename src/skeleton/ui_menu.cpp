@@ -180,7 +180,8 @@ void UiMenu::load(bool isGame) {
         // skip some options if needed
         if (group.getName() == "ROMS") continue;
         if (isRomMenu && (group.getName() == "UI_OPTIONS" || group.getName() == "UI_FILTERING"
-                          || group.getName() == "NETWORK" || group.getName() == "ARTWORK")) continue;
+                          || group.getName() == "NETWORK" || group.getName() == "ARTWORK"
+                          || group.getName() == "DEMO_MODE")) continue;
         // no artwork downloads for this core
         if (group.getName() == "ARTWORK" && !ui->getUiRomList()->getRomList()->artwork) continue;
         // push group title

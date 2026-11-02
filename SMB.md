@@ -126,3 +126,17 @@ the first time a newer build starts (a file already in `psnes/` is never overwri
 Display (scaling, filter, effect, fps) and controller settings are shared: pppEmu passes them
 to the Genesis / NES program when a game starts (`shared_settings.cfg`), and gets them back
 when the game is closed.
+
+## Demo mode (attract mode)
+
+Random games are shown one after the other. Settings in the main menu (R1), DEMO_MODE:
+
+- START_AFTER: idle time in the list before it starts (OFF, 1, 2, 5, 10 min). L3 + R3 (both
+  sticks pressed) starts it at once.
+- TIME_PER_GAME: 30 sec, 1, 2, 5 min.
+- GAMES: ALL, CURRENT PAGE (the L2 / R2 console page), FAVORITES, SUPER NINTENDO ONLY (no
+  switching between programs).
+- SOUND: ON / OFF.
+
+Any button: back to the list on the game being shown. While a demo game runs, its saves are
+never written. Sega CD games are not used (big downloads, bios needed).

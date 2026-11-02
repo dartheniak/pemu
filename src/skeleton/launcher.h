@@ -38,6 +38,11 @@ namespace pemu {
         std::string settings;
         // console page (system filter, L2 / R2) to show again in the launcher's list
         std::string system;
+        // demo mode (see demo.h): run the game as a demo game for this many seconds
+        int demoSeconds = 0;
+        bool demoSound = true;
+        // demo mode: back in the launcher, start the next demo game
+        bool demoNext = false;
         // true if started by the launcher or returning to it
         bool pppemu = false;
     };
