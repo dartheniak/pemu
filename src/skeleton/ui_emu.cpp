@@ -146,6 +146,8 @@ void UiEmu::stop() {
 
     pMain->updateInputMapping(false);
     setVisibility(Visibility::Hidden);
+    // nothing runs anymore (emulators check isPaused() before running a frame)
+    paused = true;
 
     if (mExitOnStop) {
         pMain->setVisibility(Visibility::Hidden);
@@ -184,6 +186,9 @@ void UiEmu::stopDemo(bool next) {
     // this game's list entry: selected again in the launcher's list
     const Game game = currentGame;
     if (next) demo::setNextWanted(true);
+    // paused first, like when quitting from the in-game menu: some emulators (pgen...) would
+    // otherwise run one more frame after stop(), with the video already deleted (crash)
+    pause();
     // stopped while the demo is still on: the emulators don't write the game's saves
     stop();
     if (!next) demo::end();
