@@ -100,3 +100,22 @@ shipped in the same package (`/app0/pgen.bin`): pppEmu closes, the game starts, 
 the game (in-game menu, QUIT) brings back pppEmu on the same game. The Genesis program keeps
 its saves and settings in `/data/pppemu/pgen/`. Artwork is stored per console in
 `/data/pppemu/media/<console>/`.
+
+## Folders (pppEmu)
+
+```
+/data/pppemu/            shared by all consoles
+   config.cfg            menu, network, artwork, display and controller settings
+   pppemu.log            debug log
+   roms/  media/  skins/  cache/
+   psnes/                Super Nintendo: sram, save states (saves), per-game settings, cheats
+   pgen/                 Mega Drive, Master System, Game Gear, Sega CD (+ bios/)
+   pnes/                 NES
+```
+
+SNES files from older pppEmu builds (directly in `/data/pppemu/`) are moved to `psnes/`
+the first time a newer build starts (a file already in `psnes/` is never overwritten).
+
+Display (scaling, filter, effect, fps) and controller settings are shared: pppEmu passes them
+to the Genesis / NES program when a game starts (`shared_settings.cfg`), and gets them back
+when the game is closed.

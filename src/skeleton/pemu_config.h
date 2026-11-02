@@ -168,6 +168,14 @@ namespace pemu {
             std::string program;
         };
 
+        // order of the consoles in the system filter (L2 / R2), as screenscraper ids.
+        // Consoles not listed come after, by name. Empty: all by name.
+        virtual std::vector<int> getSystemOrder() { return {}; }
+
+        // folder of this emulator's own files (saves, save states, per-game settings...).
+        // Default: the data folder. pppEmu: a sub folder per emulator ("/data/pppemu/psnes/")
+        virtual std::string getEmuDataPath();
+
         // consoles listed, the first one is this program's own console.
         // Default: only this program's console.
         virtual std::vector<CoreSystem> getSystems();
@@ -189,9 +197,11 @@ namespace pemu {
 
         virtual std::vector<int> getCoreHiddenOptionToEnable() { return {}; }
 
+    protected:
+        c2d::Renderer *p_renderer = nullptr;
+
     private:
         Config *p_game_config = nullptr;
-        c2d::Renderer *p_renderer = nullptr;
     };
 }
 

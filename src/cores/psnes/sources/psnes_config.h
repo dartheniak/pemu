@@ -13,6 +13,11 @@ class PSNESConfig final : public PEMUConfig {
 public:
     PSNESConfig(Renderer *renderer, int version);
 
+    // pppEmu: snes files in their own folder, like the other emulators ("/data/pppemu/psnes/")
+    std::string getEmuDataPath() override {
+        return p_renderer->getIo()->getDataPath() + "psnes/";
+    }
+
     std::string getCoreVersion() override {
         return "snes9x: " + std::string(VERSION);
     }
@@ -45,6 +50,12 @@ public:
     // pppEmu: the system filter (L2 / R2 in the list) switches between consoles
     std::vector<int> getCoreHiddenOptionToEnable() override {
         return {UI_FILTER_SYSTEM};
+    }
+
+    // pppEmu: consoles on L2 / R2: master system, game gear, mega drive, sega cd, nes,
+    // game boy, game boy color, game boy advance, super nintendo
+    std::vector<int> getSystemOrder() override {
+        return {2, 21, 1, 20, 3, 9, 10, 12, 4};
     }
 
     // pppEmu: super nintendo games run here, other consoles' games in other programs

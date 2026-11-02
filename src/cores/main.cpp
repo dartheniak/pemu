@@ -56,6 +56,13 @@ int main(int argc, char **argv) {
                 launchArgs.returnTo.empty() ? "" : " return ", launchArgs.returnTo.c_str());
         logKeepPrevious();
     }
+    // pppEmu: same display and controller settings as the program we come from
+    if (launchArgs.pppemu) {
+        const std::string settings = !launchArgs.settings.empty() ? launchArgs.settings
+                                     : io->getDataPath() + "shared_settings.cfg";
+        applySharedSettings(cfg, settings);
+    }
+
     if (!launchArgs.rom.empty()) {
         const std::string rom = launchArgs.rom;
         if (io->exist(rom)) {
@@ -115,6 +122,11 @@ int main(int argc, char **argv) {
     pemu::logLine("main: ui ready, screen %ix%i", (int) pemu_ui->getSize().x, (int) pemu_ui->getSize().y);
     while (!pemu_ui->done) {
         pemu_ui->flip();
+    }
+
+    // pppEmu: going back to the launcher, with this program's settings (changed in its menu maybe)
+    if (!launchArgs.returnTo.empty() && !launchArgs.settings.empty()) {
+        writeSharedSettings(cfg, launchArgs.settings);
     }
 
     delete (skin);

@@ -329,11 +329,14 @@ bool8 S9xDeinitUpdate(int width, int height) {
     return TRUE;
 }
 
+// pppEmu: snes files (sram, save states, cheats...) in their own folder ("/data/pppemu/psnes/"),
+// roms stay in the shared roms folder
 static int S9xCreateDirectory() {
-    m_ui->getIo()->create(m_ui->getIo()->getDataPath());
-    for (const auto &dirName: dirNames) {
-        if (dirName[0]) {
-            m_ui->getIo()->create(m_ui->getIo()->getDataPath() + dirName);
+    const std::string dir = m_ui->getConfig()->getEmuDataPath();
+    m_ui->getIo()->create(dir);
+    for (int i = 0; i < (int) (sizeof(dirNames) / sizeof(dirNames[0])); i++) {
+        if (dirNames[i][0] && i != ROM_DIR) {
+            m_ui->getIo()->create(dir + dirNames[i]);
         }
     }
 
@@ -349,8 +352,10 @@ std::string S9xGetDirectory(s9x_getdirtype type) {
     switch (type) {
         case ROMFILENAME_DIR:
             return Memory.ROMFilename;
-        default:
+        case ROM_DIR:
             return m_ui->getIo()->getDataPath() + dirNames[type];
+        default:
+            return m_ui->getConfig()->getEmuDataPath() + dirNames[type];
     }
 }
 

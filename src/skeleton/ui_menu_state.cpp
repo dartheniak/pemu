@@ -74,10 +74,11 @@ public:
     void setRom(const ss_api::Game &game) {
         memset(path, 0, MAX_PATH);
         memset(shot, 0, MAX_PATH);
+        const std::string dir = ui->getConfig()->getEmuDataPath();
         snprintf(path, 1023, "%ssaves/%s-%i.state",
-                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(Utility::baseName(game.path)).c_str(), id);
+                 dir.c_str(), Utility::removeExt(Utility::baseName(game.path)).c_str(), id);
         snprintf(shot, 1023, "%ssaves/%s-%i.png",
-                 ui->getIo()->getDataPath().c_str(), Utility::removeExt(Utility::baseName(game.path)).c_str(), id);
+                 dir.c_str(), Utility::removeExt(Utility::baseName(game.path)).c_str(), id);
 
         loadTexture();
     }

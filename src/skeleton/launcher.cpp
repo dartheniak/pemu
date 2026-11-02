@@ -25,6 +25,8 @@ using namespace pemu;
 #define ARG_ROM "--pppemu-rom="
 #define ARG_RETURN "--pppemu-return="
 #define ARG_SELECT "--pppemu-select="
+#define ARG_SETTINGS "--pppemu-settings="
+#define SHARED_SETTINGS_FILE "shared_settings.cfg"
 // desktop builds only: data folder of the program to go back to (its working directory)
 #define ARG_CWD "--pppemu-cwd="
 
@@ -57,6 +59,8 @@ LaunchArgs pemu::parseLaunchArgs(int argc, char **argv) {
         } else if (startsWith(argv[i], ARG_SELECT)) {
             args.select = argv[i] + strlen(ARG_SELECT);
             args.pppemu = true;
+        } else if (startsWith(argv[i], ARG_SETTINGS)) {
+            args.settings = argv[i] + strlen(ARG_SETTINGS);
         } else if (startsWith(argv[i], ARG_CWD)) {
             cwd = argv[i] + strlen(ARG_CWD);
         }
@@ -214,11 +218,16 @@ bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
     }
 #endif
 
+    // the other program uses the same display and controller settings
+    const std::string settings = ui->getIo()->getDataPath() + SHARED_SETTINGS_FILE;
+    writeSharedSettings(ui->getConfig(), settings);
+
     s_pendingProgram = program;
     s_pendingArgs = {
             ARG_ROM + fullPath,
             ARG_RETURN + selfProgramPath(),
             ARG_SELECT + game.romsPath + game.path,
+            ARG_SETTINGS + settings,
     };
 #ifndef __PS4__
     s_pendingArgs.push_back(ARG_CWD + ui->getIo()->getDataPath());
@@ -263,6 +272,84 @@ void pemu::returnToLauncher(const LaunchArgs &args) {
 #endif
     std::vector<std::string> a;
     if (!args.select.empty()) a.push_back(ARG_SELECT + args.select);
+    if (!args.settings.empty()) a.push_back(ARG_SETTINGS + args.settings);
     std::string error;
     execProgram(program, a, &error);
+}
+
+// options shared by the programs: display options common to all the emulators, and the controls
+static bool isSharedOption(const std::string &group, const std::string &name) {
+    if (group == "EMULATION") {
+        return name == "SCALING" || name == "SCALING_MODE" || name == "FILTER" ||
+               name == "EFFECT" || name == "SHOW_FPS";
+    }
+    return group == "GAMEPAD" || group == "KEYBOARD";
+}
+
+bool pemu::writeSharedSettings(config::Config *cfg, const std::string &path) {
+    FILE *f = fopen(path.c_str(), "w");
+    if (!f) {
+        logLine("settings: could not write %s", path.c_str());
+        return false;
+    }
+    int count = 0;
+    for (auto &group: *cfg->getGroups()) {
+        for (auto &opt: *group.getOptions()) {
+            if (!isSharedOption(group.getName(), opt.getName())) continue;
+            if (opt.getType() == config::Option::Type::Integer) {
+                fprintf(f, "%s/%s=%i\n", group.getName().c_str(), opt.getName().c_str(), opt.getInteger());
+            } else if (opt.getType() == config::Option::Type::Array ||
+                       opt.getType() == config::Option::Type::String) {
+                fprintf(f, "%s/%s=%s\n", group.getName().c_str(), opt.getName().c_str(), opt.getString().c_str());
+            } else {
+                continue;
+            }
+            count++;
+        }
+    }
+    fclose(f);
+    logLine("settings: %i shared settings written", count);
+    return true;
+}
+
+bool pemu::applySharedSettings(config::Config *cfg, const std::string &path) {
+    FILE *f = fopen(path.c_str(), "r");
+    if (!f) return false;
+    int count = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), f)) {
+        std::string l = line;
+        while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
+        const size_t slash = l.find('/');
+        const size_t eq = l.find('=');
+        if (slash == std::string::npos || eq == std::string::npos || eq < slash) continue;
+        const std::string groupName = l.substr(0, slash);
+        const std::string name = l.substr(slash + 1, eq - slash - 1);
+        const std::string value = l.substr(eq + 1);
+        if (!isSharedOption(groupName, name)) continue;
+        for (auto &group: *cfg->getGroups()) {
+            if (group.getName() != groupName) continue;
+            for (auto &opt: *group.getOptions()) {
+                if (opt.getName() != name) continue;
+                if (opt.getType() == config::Option::Type::Integer) {
+                    opt.setInteger(atoi(value.c_str()));
+                    count++;
+                } else if (opt.getType() == config::Option::Type::Array) {
+                    // only a value this program knows (a shader both programs have...)
+                    const auto values = opt.getArray();
+                    if (std::find(values.begin(), values.end(), value) != values.end()) {
+                        opt.setArrayIndex(value);
+                        count++;
+                    }
+                } else if (opt.getType() == config::Option::Type::String) {
+                    opt.setString(value);
+                    count++;
+                }
+            }
+        }
+    }
+    fclose(f);
+    cfg->save();
+    logLine("settings: %i shared settings applied", count);
+    return true;
 }

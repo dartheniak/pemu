@@ -2,6 +2,7 @@
 // Created by cpasjuste on 29/05/18.
 //
 
+#include <unistd.h>
 #include "skeleton/pemu.h"
 #include "psnes_config.h"
 
@@ -12,6 +13,26 @@ PSNESConfig::PSNESConfig(Renderer *renderer, int version) : PEMUConfig(renderer,
     printf("PSNESConfig(%s, v%i)\n", getPath().c_str(), version);
 
     c2d::Io *io = renderer->getIo();
+
+    // pppEmu: snes files used to be in the data folder itself, move them to "psnes/" once.
+    // File by file, a file already in "psnes/" is never overwritten (the old one stays).
+    const std::string emuDir = io->getDataPath() + "psnes/";
+    io->create(emuDir);
+    for (const char *dir: {"sram", "saves", "configs", "cheat", "screenshots", "spc", "patch", "bios", "log"}) {
+        const std::string from = io->getDataPath() + dir + "/";
+        const std::string to = emuDir + dir + "/";
+        if (io->getType(from) != c2d::Io::Type::Directory) continue;
+        io->create(to);
+        int moved = 0, kept = 0;
+        for (const auto &f: io->getDirList(from)) {
+            if (f.name.empty() || f.name == "." || f.name == "..") continue;
+            if (!io->exist(to + f.name) && rename((from + f.name).c_str(), (to + f.name).c_str()) == 0) moved++;
+            else kept++;
+        }
+        // empty now: removed, so it's not done again
+        if (kept == 0) rmdir(from.c_str());
+        printf("PSNESConfig: %s -> %s: %i moved, %i kept\n", from.c_str(), to.c_str(), moved, kept);
+    }
 
     const auto group = getGroup(EMULATION);
     if (!group) {

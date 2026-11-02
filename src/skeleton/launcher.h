@@ -20,6 +20,10 @@ namespace ss_api {
     class Game;
 }
 
+namespace c2d::config {
+    class Config;
+}
+
 namespace pemu {
     class UiMain;
 
@@ -30,11 +34,19 @@ namespace pemu {
         std::string returnTo;
         // game to select in the list (romsPath + path)
         std::string select;
+        // settings shared by all the programs (display, controls), see writeSharedSettings
+        std::string settings;
         // true if started by the launcher or returning to it
         bool pppemu = false;
     };
 
     LaunchArgs parseLaunchArgs(int argc, char **argv);
+
+    // display and controller settings shared by pppEmu's programs: written to "path" when
+    // a program hands over to another one, applied (and saved) by the program starting.
+    // Only the options both programs have are used (same group and option name).
+    bool writeSharedSettings(c2d::config::Config *cfg, const std::string &path);
+    bool applySharedSettings(c2d::config::Config *cfg, const std::string &path);
 
     // "smb://user:password@host/..." -> "smb://user:***@host/..." (for the log)
     std::string hidePassword(const std::string &text);

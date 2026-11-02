@@ -229,6 +229,16 @@ void RomList::updateFilterOptions() {
     // sort games
     printf("RomList::updateFilterOptions: sorting games...\n");
     std::sort(gameList->systemList.systems.begin(), gameList->systemList.systems.end(), Api::sortSystemByName);
+    // pppEmu: consoles in the order chosen by the program (the others stay after, by name)
+    const auto order = cfg->getSystemOrder();
+    if (!order.empty()) {
+        auto rank = [&order](const System &s) {
+            const auto it = std::find(order.begin(), order.end(), s.id);
+            return it == order.end() ? (int) order.size() : (int) (it - order.begin());
+        };
+        std::stable_sort(gameList->systemList.systems.begin(), gameList->systemList.systems.end(),
+                         [&rank](const System &a, const System &b) { return rank(a) < rank(b); });
+    }
     std::sort(gameList->editors.begin(), gameList->editors.end(), Api::sortEditorByName);
     std::sort(gameList->developers.begin(), gameList->developers.end(), Api::sortDeveloperByName);
     std::sort(gameList->genres.begin(), gameList->genres.end(), Api::sortGenreByName);

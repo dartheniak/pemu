@@ -11,8 +11,10 @@ namespace c2d {
         PSNESIo() : C2DIo() {
             C2DIo::create(PSNESIo::getDataPath());
             C2DIo::create(PSNESIo::getDataPath() + "roms");
-            C2DIo::create(PSNESIo::getDataPath() + "configs");
-            C2DIo::create(PSNESIo::getDataPath() + "saves");
+            // snes saves, save states and per-game settings: "psnes/" (see PSNESConfig)
+            C2DIo::create(PSNESIo::getDataPath() + "psnes");
+            C2DIo::create(PSNESIo::getDataPath() + "psnes/configs");
+            C2DIo::create(PSNESIo::getDataPath() + "psnes/saves");
         }
 
 #ifdef __PSP2__

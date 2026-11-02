@@ -207,7 +207,8 @@ bool PEMUConfig::loadGame(const Game &game) {
     delete (p_game_config);
 
     // create game configuration
-    std::string path = p_renderer->getIo()->getDataPath() + "configs/" + Utility::removeExt(Utility::baseName(game.path)) + ".cfg";
+    p_renderer->getIo()->create(getEmuDataPath() + "configs");
+    std::string path = getEmuDataPath() + "configs/" + Utility::removeExt(Utility::baseName(game.path)) + ".cfg";
     p_game_config = new Config(getName() + "_GAME", path, getAppVersion());
 
     // copy game emulation config section from main config for default options
@@ -324,6 +325,10 @@ std::vector<std::string> PEMUConfig::getNetworkFolderNames() {
         names.insert(names.begin(), name.substr(name.find_last_of('/') + 1));
     }
     return names;
+}
+
+std::string PEMUConfig::getEmuDataPath() {
+    return p_renderer->getIo()->getDataPath();
 }
 
 std::vector<PEMUConfig::CoreSystem> PEMUConfig::getSystems() {
