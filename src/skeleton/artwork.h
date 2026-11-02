@@ -47,7 +47,10 @@ namespace pemu {
         // "system": libretro system name ("Nintendo - Super Nintendo Entertainment System")
         // "systemId": screenscraper id of its games (game.system.id), "mediaPath": folder of the
         // downloaded files ("<data>/media/")
-        Artwork(c2d::Io *io, const std::string &system, int systemId, const std::string &mediaPath);
+        // "byTitle": images are named after the game's name, not its file (arcade: "sf2.zip" is
+        // "Street Fighter II: The World Warrior (World 910522).png")
+        Artwork(c2d::Io *io, const std::string &system, int systemId, const std::string &mediaPath,
+                bool byTitle = false);
 
         int getSystemId() const { return m_systemId; }
 

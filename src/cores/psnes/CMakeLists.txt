@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
+
+# pppEmu version: the ps4 package version, shown on the loading screen and in pppemu.log.
+# Raise it with every release so the ps4 sees a new version.
+set(PPPEMU_VERSION "1.01")
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
 project(psnes)
@@ -54,6 +58,7 @@ set(SNES9X_CFLAGS
         -DGFX_MULTI_FORMAT -D__LIBRETRO__
         -D__BYTE_ORDER__=__ORDER_LITTLE_ENDIAN__
         -D__PSNES__
+        -DPPPEMU_VERSION="${PPPEMU_VERSION}"
         -D__PEMU_VERSION_MAJOR__=${VERSION_MAJOR}
         -D__PEMU_VERSION_MINOR__=${VERSION_MINOR}
 )
@@ -111,7 +116,7 @@ elseif (PLATFORM_PS4)
     # pppEmu: own title id so it never clashes with the official pEMU apps
     set(PS4_PKG_TITLE "pppEmu")
     set(PS4_PKG_TITLE_ID "PPPE00001")
-    set(PS4_PKG_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}")
+    set(PS4_PKG_VERSION "${PPPEMU_VERSION}")
 elseif (PLATFORM_SWITCH)
     #####################
     # NX PLATORM
@@ -159,7 +164,7 @@ add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}.data.skin)
 
 #####################
 # pppEmu: other consoles' games run in other pEMU programs (pgen: sega consoles, pnes: nes,
-# pgba: game boy, game boy color, game boy advance),
+# pgba: game boy, game boy color, game boy advance, pfbneo: arcade),
 # shipped in the same package and started with the game (see src/skeleton/launcher.h)
 #####################
 set(PPPEMU_AUTH_INFO "000000000000000000000000001C004000FF000000000080000000000000000000000000000000000000008000400040000000000000008000000000000000080040FFFF000000F000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
@@ -191,3 +196,33 @@ endfunction()
 pppemu_add_program(pgen PPPEMU_GENESIS_PROGRAM)
 pppemu_add_program(pnes PPPEMU_NES_PROGRAM)
 pppemu_add_program(pgba PPPEMU_GBA_PROGRAM)
+pppemu_add_program(pfbneo PPPEMU_ARCADE_PROGRAM)
+
+# arcade: romset names list for the launcher (fbneo_arcade.tsv in the package), made from the
+# FBNeo game list. FBNeo's generated files (pfbneo.deps) are made first if they don't exist yet.
+if (TARGET pfbneo AND TARGET pfbneo.deps)
+    find_package(Perl REQUIRED)
+    set(PPPEMU_FBNEO_DEPS ${CMAKE_BINARY_DIR}/src/cores/pfbneo/deps)
+    add_custom_command(
+            OUTPUT ${PPPEMU_FBNEO_DEPS}/gamelist.txt
+            COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target pfbneo.deps
+            COMMENT "pppEmu: generating FBNeo files (pfbneo.deps), first build only"
+    )
+    add_custom_target(pppemu.fbneo.deps DEPENDS ${PPPEMU_FBNEO_DEPS}/gamelist.txt)
+    add_dependencies(pfbneo pppemu.fbneo.deps)
+
+    add_custom_command(
+            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fbneo_arcade.tsv
+            COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/fbneo_arcade_list.pl
+                ${PPPEMU_FBNEO_DEPS}/gamelist.txt ${CMAKE_CURRENT_BINARY_DIR}/fbneo_arcade.tsv
+            DEPENDS ${PPPEMU_FBNEO_DEPS}/gamelist.txt ${CMAKE_CURRENT_SOURCE_DIR}/tools/fbneo_arcade_list.pl
+    )
+    add_custom_target(${PROJECT_NAME}.arcadelist
+            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/fbneo_arcade.tsv
+                ${CMAKE_CURRENT_BINARY_DIR}/data_romfs/fbneo_arcade.tsv
+            DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fbneo_arcade.tsv
+    )
+    # after the data copy (it empties data_romfs)
+    add_dependencies(${PROJECT_NAME}.arcadelist ${PROJECT_NAME}.data.skin)
+    add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}.arcadelist)
+endif ()

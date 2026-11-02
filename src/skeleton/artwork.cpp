@@ -3,6 +3,7 @@
 //
 
 #include <cstdio>
+#include <algorithm>
 #include <cstring>
 #include <cerrno>
 #include <ctime>
@@ -70,7 +71,11 @@ static std::string lowerCase(std::string s) {
     return s;
 }
 
-Artwork::Artwork(c2d::Io *io, const std::string &system, int systemId, const std::string &mediaPath) {
+// consoles whose images are named after the game's name (see the constructor)
+static std::vector<int> s_byTitleSystems;
+
+Artwork::Artwork(c2d::Io *io, const std::string &system, int systemId, const std::string &mediaPath, bool byTitle) {
+    if (byTitle) s_byTitleSystems.push_back(systemId);
     m_io = io;
     m_system = system;
     m_systemId = systemId;
@@ -117,6 +122,10 @@ std::string Artwork::mediaPath() {
 }
 
 std::string Artwork::gameName(const ss_api::Game &game) {
+    if (!game.name.empty() &&
+        std::find(s_byTitleSystems.begin(), s_byTitleSystems.end(), game.system.id) != s_byTitleSystems.end()) {
+        return game.name;
+    }
     std::string name = game.path.substr(game.path.find_last_of('/') + 1);
     const size_t dot = name.find_last_of('.');
     if (dot != std::string::npos && dot > 0) name = name.substr(0, dot);

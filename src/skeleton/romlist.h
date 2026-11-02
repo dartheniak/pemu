@@ -55,6 +55,10 @@ namespace pemu {
         // sort the filter lists (genres, developers...) and update the filter menu options
         void updateFilterOptions();
 
+        // arcade bios / device files (neogeo.zip...): not games, hidden from the list, but
+        // downloaded with network arcade games (see launcher.cpp)
+        std::vector<ss_api::Game> hiddenFiles;
+
         // problems found while building the list (network unreachable, no games...),
         // shown in a message box once the ui is ready
         std::vector<std::string> warnings;
@@ -63,6 +67,9 @@ namespace pemu {
         virtual std::vector<std::string> getUsbRoots() { return {"/mnt/usb0/", "/mnt/usb1/"}; }
 
     protected:
+        // arcade consoles (CoreSystem::romsetList): full names, parents, year, company, bios hidden
+        void applyRomsetLists();
+
         // add games found in "path": "roms" are file names relative to "path" (sub folders allowed),
         // "gameListXml" an optional local gamelist.xml with names, genres...
         void addGames(const std::string &path, const ss_api::System &system,

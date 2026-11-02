@@ -10,6 +10,7 @@
 #include "pemu.h"
 #include "launcher.h"
 #include "pemu_log.h"
+#include "romset_list.h"
 
 #ifdef __SMB__
 #include "smb_io.h"
@@ -202,6 +203,40 @@ bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
                                            ui->flip();
                                            return true;
                                        }, &error);
+        // arcade: the game's parent zips and the bios / device files of its folder are needed
+        // too (fbneo looks for them next to the game). Missing ones are skipped.
+        const PEMUConfig::CoreSystem *sysDef = nullptr;
+        const auto systems = ui->getConfig()->getSystems();
+        for (const auto &sys: systems) {
+            if (sys.system.id == game.system.id) sysDef = &sys;
+        }
+        if (!fullPath.empty() && sysDef && !sysDef->romsetList.empty()) {
+            const std::string folder = game.path.find('/') != std::string::npos
+                                       ? game.path.substr(0, game.path.find_last_of('/') + 1) : "";
+            std::vector<std::string> extra;
+            if (RomsetList *list = RomsetList::get(sysDef->romsetList)) {
+                for (const auto &p: list->parents(game.path)) extra.push_back(folder + p + ".zip");
+            }
+            for (const auto &h: ui->getUiRomList()->getRomList()->hiddenFiles) {
+                if (h.romsPath == game.romsPath) extra.push_back(h.path);
+            }
+            for (size_t i = 0; i < extra.size(); i++) {
+                progress->setMessage("Downloading " + extra[i].substr(extra[i].find_last_of('/') + 1) + "...");
+                progress->setProgress(0);
+                ui->flip();
+                std::string err;
+                if (SmbIo::fetchToCache(game.romsPath, extra[i], cacheDir,
+                                        [ui](uint64_t done, uint64_t total) {
+                                            const float p = total > 0 ? (float) done / (float) total : 1.0f;
+                                            ui->getUiProgressBox()->setProgress(p);
+                                            ui->flip();
+                                            return true;
+                                        }, &err).empty()) {
+                    logLine("launcher: %s not downloaded (%s)", extra[i].c_str(), err.c_str());
+                }
+            }
+        }
+
         // cd image as ".cue": its track files ("FILE "Game (Track 1).bin" BINARY") are needed too
         if (!fullPath.empty() && Utility::endsWith(Utility::toLower(fullPath), ".cue")) {
             const std::string folder = game.path.find('/') != std::string::npos

@@ -171,6 +171,9 @@ namespace pemu {
             // program running its games: empty = this program, else the path of another
             // program of the package ("/app0/pgen.bin"), started with the game (see launcher.h)
             std::string program;
+            // arcade: names list of the romsets ("sf2" -> "Street Fighter II..."), see romset_list.h.
+            // Games get their full name (also used for the artwork), bios files are hidden.
+            std::string romsetList;
         };
 
         // order of the consoles in the system filter (L2 / R2), as screenscraper ids.
@@ -204,6 +207,16 @@ namespace pemu {
 
     protected:
         c2d::Renderer *p_renderer = nullptr;
+
+        // per-game settings: only the options changed for a game are its own (see loadGame)
+        static constexpr const char *GAME_CHANGED_GROUP = "CHANGED_FOR_THIS_GAME";
+        static constexpr const char *GAME_CHANGED_OPTION = "OPTIONS";
+        static constexpr int GAME_CHANGED_GROUP_ID = 1000;
+        static constexpr int GAME_CHANGED_OPTION_ID = 1000;
+
+        static void copyOptionValue(c2d::config::Option *from, c2d::config::Option *to);
+
+        static bool sameOptionValue(c2d::config::Option *a, c2d::config::Option *b);
 
     private:
         Config *p_game_config = nullptr;

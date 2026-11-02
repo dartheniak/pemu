@@ -76,8 +76,8 @@ On Linux the text fields are typed in the terminal the app was started from
 ## Several consoles (pppEmu)
 
 pppEmu lists Master System, Game Gear, Mega Drive / Genesis, Sega CD, NES, Game Boy,
-Game Boy Color, Game Boy Advance and Super Nintendo games together (L2 / R2 switch between
-ALL and one console, in that order). Each console's games are found by folder name, on the
+Game Boy Color, Game Boy Advance, Super Nintendo and Arcade games together (L2 / R2 switch
+between ALL and one console, in that order). Each console's games are found by folder name, on the
 network share, in `/data/pppemu/roms/` and on USB drives:
 
 - Super Nintendo: `SNES`, `Super Nintendo`, `Nintendo - Super Nintendo Entertainment System`...
@@ -89,6 +89,11 @@ network share, in `/data/pppemu/roms/` and on USB drives:
 - Game Boy Color: `Game Boy Color`, `GBC`, `Nintendo - Game Boy Color`...
 - Game Boy Advance: `Game Boy Advance`, `GBA`, `Nintendo - Game Boy Advance`... (the bios is
   optional: `/data/pppemu/pgba/bios/gba_bios.bin`)
+- Arcade (FBNeo, one page for everything): `FBNeo - Arcade Games`, `FBNeo`, `Arcade`, `MAME`,
+  `Neo Geo`, `CPS1`, `CPS2`, `CPS3`... FBNeo romsets (`sf2.zip`), shown with their full names.
+  Bios files (`neogeo.zip`, `pgm.zip`...) are hidden from the list but must be in the same
+  folder; zips FBNeo doesn't know are hidden. A network game is downloaded with its parent
+  sets and the folder's bios files. libretro has images for arcade games, no genre/players.
 - Sega CD: `Sega CD`, `Mega-CD`, `Mega CD`, `Sega - Mega-CD - Sega CD`... (`.chd`, `.cue` + its
   `.bin` tracks, `.iso`). Needs the bios files in `/data/pppemu/pgen/bios/`: `bios_CD_U.bin`
   (USA), `bios_CD_E.bin` (Europe), `bios_CD_J.bin` (Japan). libretro has no game information
@@ -98,7 +103,7 @@ Backgrounds (in `/data/pppemu/skins/default/`, 1920x1080 jpg or png): `backgroun
 for ALL, and one per console page: `background_super_nintendo.jpg`,
 `background_mega_drive.jpg`, `background_master_system.jpg`, `background_game_gear.jpg`,
 `background_nes.jpg`, `background_sega_cd.jpg`, `background_game_boy.jpg`,
-`background_game_boy_color.jpg`, `background_game_boy_advance.jpg`.
+`background_game_boy_color.jpg`, `background_game_boy_advance.jpg`, `background_arcade.jpg`.
 
 Super Nintendo games run in pppEmu itself, NES games in the NES program (`/app0/pnes.bin`,
 data in `/data/pppemu/pnes/`). Sega games run in the Genesis program
@@ -118,6 +123,7 @@ its saves and settings in `/data/pppemu/pgen/`. Artwork is stored per console in
    pgen/                 Mega Drive, Master System, Game Gear, Sega CD (+ bios/)
    pnes/                 NES
    pgba/                 Game Boy, Game Boy Color, Game Boy Advance
+   pfbneo/               Arcade
 ```
 
 SNES files from older pppEmu builds (directly in `/data/pppemu/`) are moved to `psnes/`

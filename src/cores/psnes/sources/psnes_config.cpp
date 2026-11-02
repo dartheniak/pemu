@@ -62,6 +62,9 @@ PSNESConfig::PSNESConfig(Renderer *renderer, int version) : PEMUConfig(renderer,
     getOption(EMU_SCALING_MODE)->setArray({"ASPECT", "INTEGER"}, 0);
 
 #if defined(PPPEMU_GENESIS_PROGRAM) || defined(PPPEMU_NES_PROGRAM) || defined(PPPEMU_GBA_PROGRAM)
+    // pppEmu: list titles, not file names (arcade: "Metal Slug", not "mslug")
+    getOption(UI_SHOW_ZIP_NAMES)->setArrayIndex(0);
+
     // pppEmu demo mode: also "super nintendo games only" (they run here: no program switching)
     getOption(DEMO_GAMES)->setArray({"ALL", "CURRENT PAGE", "FAVORITES", "SUPER NINTENDO ONLY"}, 0);
 #endif

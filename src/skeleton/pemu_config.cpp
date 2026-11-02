@@ -236,14 +236,87 @@ bool PEMUConfig::loadGame(const Game &game) {
     p_game_config->addGroup(group);
 #endif
 
+    // pppEmu: names of the options changed for this game ("EMULATION/FILTER,GAMEPAD/JOY_A")
+    Group changed(GAME_CHANGED_GROUP, GAME_CHANGED_GROUP_ID);
+    changed.addOption({GAME_CHANGED_OPTION, std::string(""), GAME_CHANGED_OPTION_ID});
+    p_game_config->addGroup(changed);
+
     p_game_config->load();
+
+    // the other options follow the global settings: a global change applies to every game,
+    // except the games where that option was changed (older files: no list, all global)
+    const std::string list = "," + p_game_config->getOption(GAME_CHANGED_OPTION_ID)->getString() + ",";
+    int kept = 0;
+    for (const int id: {EMULATION, GAMEPAD, KEYBOARD}) {
+        Group *main = getGroup(id), *game = p_game_config->getGroup(id);
+        if (!main || !game) continue;
+        for (auto &opt: *game->getOptions()) {
+            Option *global = main->getOption(opt.getName());
+            if (!global) continue;
+            if (list.find("," + game->getName() + "/" + opt.getName() + ",") != std::string::npos) {
+                kept++;
+                continue;
+            }
+            copyOptionValue(global, &opt);
+        }
+    }
+    printf("PEMUConfig::loadGame: %i option(s) changed for this game\n", kept);
 
     return true;
 }
 
 bool PEMUConfig::saveGame() {
     if (!p_game_config) return false;
+
+    // pppEmu: remember which options differ from the global settings (changed for this game)
+    std::string list;
+    for (const int id: {EMULATION, GAMEPAD, KEYBOARD}) {
+        Group *main = getGroup(id), *game = p_game_config->getGroup(id);
+        if (!main || !game) continue;
+        for (auto &opt: *game->getOptions()) {
+            Option *global = main->getOption(opt.getName());
+            if (global && !sameOptionValue(global, &opt)) {
+                list += (list.empty() ? "" : ",") + game->getName() + "/" + opt.getName();
+            }
+        }
+    }
+    if (Option *o = p_game_config->getOption(GAME_CHANGED_OPTION_ID)) o->setString(list);
+
     return p_game_config->save();
+}
+
+void PEMUConfig::copyOptionValue(Option *from, Option *to) {
+    switch (from->getType()) {
+        case Option::Type::Integer:
+            to->setInteger(from->getInteger());
+            break;
+        case Option::Type::Float:
+            to->setFloat(from->getFloat());
+            break;
+        case Option::Type::Array:
+            to->setArrayIndex(from->getArrayIndex());
+            break;
+        case Option::Type::String:
+            to->setString(from->getString());
+            break;
+        default:
+            break;
+    }
+}
+
+bool PEMUConfig::sameOptionValue(Option *a, Option *b) {
+    switch (a->getType()) {
+        case Option::Type::Integer:
+            return a->getInteger() == b->getInteger();
+        case Option::Type::Float:
+            return a->getFloat() == b->getFloat();
+        case Option::Type::Array:
+            return a->getArrayIndex() == b->getArrayIndex();
+        case Option::Type::String:
+            return a->getString() == b->getString();
+        default:
+            return true;
+    }
 }
 
 bool PEMUConfig::addRomPath(const std::string &name, const std::string &path, const ss_api::System &system) {

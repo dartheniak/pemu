@@ -9,6 +9,7 @@
 #include "pemu.h"
 #include "folder_names.h"
 #include "pemu_log.h"
+#include "romset_list.h"
 
 RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<std::string> &_filters) {
     printf("RomList()\n");
@@ -55,7 +56,7 @@ RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<s
 
     // debug log (<data>/pppemu.log), see pemu_log.h
     logInit(ui->getIo()->getDataPath());
-    logLine("RomList: start");
+    logLine("RomList: start (%s)", emuVersion.c_str());
 
     // artwork and game information downloads (consoles with a libretro name).
     // Several consoles: each one has its own media folder ("media/Sega - Mega Drive - Genesis/")
@@ -64,7 +65,7 @@ RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<s
         if (sys.libretro.empty()) continue;
         const std::string media = ui->getIo()->getDataPath() + "media/" +
                                   (systems.size() > 1 ? sys.libretro + "/" : "");
-        artworks.push_back(new Artwork(ui->getIo(), sys.libretro, sys.system.id, media));
+        artworks.push_back(new Artwork(ui->getIo(), sys.libretro, sys.system.id, media, !sys.romsetList.empty()));
     }
     artwork = artworks.empty() ? nullptr : artworks.front();
 }
@@ -197,6 +198,9 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
                            " or a network share (main menu, NETWORK).");
     }
 
+    // arcade: romset names ("sf2.zip" -> "Street Fighter II..."), bios files hidden
+    applyRomsetLists();
+
     // downloaded game information (developer, genre, year...) for games that don't have it
     for (auto a: artworks) {
         if (a->loadDatabase()) {
@@ -320,6 +324,62 @@ static bool hasExtension(const std::string &name, const std::vector<std::string>
         if (lower.size() >= le.size() && lower.compare(lower.size() - le.size(), le.size(), le) == 0) return true;
     }
     return false;
+}
+
+void RomList::applyRomsetLists() {
+    hiddenFiles.clear();
+    for (const auto &sys: ui->getConfig()->getSystems()) {
+        if (sys.romsetList.empty()) continue;
+        RomsetList *list = RomsetList::get(sys.romsetList);
+        if (!list) continue;
+
+        int named = 0, hidden = 0, unknown = 0;
+        auto &games = gameList->games;
+        for (auto it = games.begin(); it != games.end();) {
+            if (it->system.id != sys.system.id) {
+                ++it;
+                continue;
+            }
+            const RomsetList::Set *set = list->find(it->path);
+            if (set && set->bios) {
+                hiddenFiles.push_back(*it);
+                it = games.erase(it);
+                hidden++;
+                continue;
+            }
+            if (!set) {
+                // not a set FBNeo knows (other emulators' sets, device files...): it couldn't run
+                it = games.erase(it);
+                unknown++;
+                continue;
+            }
+            if (set) {
+                it->name = set->fullName;
+                if (!set->company.empty()) {
+                    const int id = (int) std::hash<std::string>()(set->company) & 0x7fffffff;
+                    it->developer = {id, set->company};
+                    it->editor = {id, set->company};
+                    if (gameList->findDeveloperByName(set->company).name != set->company) {
+                        gameList->developers.emplace_back(it->developer);
+                    }
+                    if (gameList->findEditorByName(set->company).name != set->company) {
+                        gameList->editors.emplace_back(it->editor);
+                    }
+                }
+                if (!set->year.empty() && it->date.empty()) {
+                    it->date = set->year;
+                    if (std::find(gameList->dates.begin(), gameList->dates.end(), set->year) == gameList->dates.end()) {
+                        gameList->dates.emplace_back(set->year);
+                    }
+                }
+                if (!set->parent.empty()) it->cloneOf = set->parent + ".zip";
+                named++;
+            }
+            ++it;
+        }
+        logLine("RomList: %s: %i games, %i bios files hidden, %i unknown files hidden",
+                sys.system.name.c_str(), named, hidden, unknown);
+    }
 }
 
 void RomList::addGames(const std::string &path, const System &system, std::vector<std::string> roms,

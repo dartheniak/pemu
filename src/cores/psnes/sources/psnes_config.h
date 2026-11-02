@@ -19,7 +19,11 @@ public:
     }
 
     std::string getCoreVersion() override {
+#ifdef PPPEMU_VERSION
+        return "pppEmu " PPPEMU_VERSION " - snes9x " + std::string(VERSION);
+#else
         return "snes9x: " + std::string(VERSION);
+#endif
     }
 
     std::vector<std::string> getCoreSupportedExt() override {
@@ -46,16 +50,16 @@ public:
         };
     }
 
-#if defined(PPPEMU_GENESIS_PROGRAM) || defined(PPPEMU_NES_PROGRAM) || defined(PPPEMU_GBA_PROGRAM)
+#if defined(PPPEMU_GENESIS_PROGRAM) || defined(PPPEMU_NES_PROGRAM) || defined(PPPEMU_GBA_PROGRAM) || defined(PPPEMU_ARCADE_PROGRAM)
     // pppEmu: the system filter (L2 / R2 in the list) switches between consoles
     std::vector<int> getCoreHiddenOptionToEnable() override {
         return {UI_FILTER_SYSTEM};
     }
 
     // pppEmu: consoles on L2 / R2: master system, game gear, mega drive, sega cd, nes,
-    // game boy, game boy color, game boy advance, super nintendo
+    // game boy, game boy color, game boy advance, super nintendo, arcade
     std::vector<int> getSystemOrder() override {
-        return {2, 21, 1, 20, 3, 9, 10, 12, 4};
+        return {2, 21, 1, 20, 3, 9, 10, 12, 4, 75};
     }
 
     // pppEmu: super nintendo games run here, other consoles' games in other programs
@@ -110,6 +114,24 @@ public:
                 {".zip", ".gba"},
                 "Nintendo - Game Boy Advance",
                 PPPEMU_GBA_PROGRAM
+        });
+#endif
+#ifdef PPPEMU_ARCADE_PROGRAM
+        // arcade: all in one page (cps, neo geo...), run by the arcade program (FBNeo).
+        // Romset names from the list made at build time (fbneo_arcade.tsv, see romset_list.h)
+        systems.push_back({
+                {75, 0, "Arcade"},
+                {
+                        "FBNeo - Arcade Games",                     // libretro
+                        "FinalBurn Neo", "Final Burn Neo", "FBNeo", "FB Neo", "FBA",
+                        "Arcade", "Arcades", "MAME",
+                        "SNK - Neo Geo", "Neo Geo", "NeoGeo", "Neo-Geo",
+                        "CPS1", "CPS2", "CPS3",
+                },
+                {".zip"},
+                "FBNeo - Arcade Games",
+                PPPEMU_ARCADE_PROGRAM,
+                p_renderer->getIo()->getRomFsPath() + "fbneo_arcade.tsv"
         });
 #endif
 #ifdef PPPEMU_GENESIS_PROGRAM
