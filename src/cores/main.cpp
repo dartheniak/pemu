@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
         logInit(io->getDataPath());
         logLine("main: started with%s%s%s%s%s%s",
                 launchArgs.rom.empty() ? "" : " rom ", launchArgs.rom.c_str(),
-                launchArgs.select.empty() ? "" : " select ", launchArgs.select.c_str(),
+                launchArgs.select.empty() ? "" : " select ", hidePassword(launchArgs.select).c_str(),
                 launchArgs.returnTo.empty() ? "" : " return ", launchArgs.returnTo.c_str());
         logKeepPrevious();
     }

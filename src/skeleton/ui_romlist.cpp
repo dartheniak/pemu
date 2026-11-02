@@ -467,7 +467,7 @@ bool UIRomList::selectGame(const std::string &fullPath) {
             return true;
         }
     }
-    logLine("UIRomList::selectGame: %s not in the list", fullPath.c_str());
+    logLine("UIRomList::selectGame: %s not in the list", hidePassword(fullPath).c_str());
     return false;
 }
 

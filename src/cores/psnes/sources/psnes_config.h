@@ -41,52 +41,82 @@ public:
         };
     }
 
-#ifdef PPPEMU_GENESIS_PROGRAM
+#if defined(PPPEMU_GENESIS_PROGRAM) || defined(PPPEMU_NES_PROGRAM)
     // pppEmu: the system filter (L2 / R2 in the list) switches between consoles
     std::vector<int> getCoreHiddenOptionToEnable() override {
         return {UI_FILTER_SYSTEM};
     }
 
-    // pppEmu: super nintendo games run here, mega drive / genesis, master system and game gear
-    // games in the genesis program shipped in the same package (see skeleton/launcher.h)
+    // pppEmu: super nintendo games run here, other consoles' games in other programs
+    // shipped in the same package (see skeleton/launcher.h)
     std::vector<CoreSystem> getSystems() override {
-        return {
+        std::vector<CoreSystem> systems = {
                 {getNetworkSystem(), getNetworkFolderNames(), getCoreSupportedExt(), getLibretroSystem(), ""},
-                {
-                        {1, 0, "Mega Drive"},
-                        {
-                                "Sega - Mega Drive - Genesis",              // No-Intro
-                                "Sega Mega Drive", "Sega Genesis",
-                                "Mega Drive", "MegaDrive", "Genesis",
-                                "Sega MD", "MD", "GEN", "Genesis - Mega Drive",
-                        },
-                        {".zip", ".md", ".smd", ".gen", ".bin", ".mdx"},
-                        "Sega - Mega Drive - Genesis",
-                        PPPEMU_GENESIS_PROGRAM
-                },
-                // also run by the genesis program (Genesis Plus GX)
-                {
-                        {2, 0, "Master System"},
-                        {
-                                "Sega - Master System - Mark III",          // No-Intro
-                                "Sega Master System", "Master System", "MasterSystem",
-                                "Sega Mark III", "Mark III", "SMS",
-                        },
-                        {".zip", ".sms"},
-                        "Sega - Master System - Mark III",
-                        PPPEMU_GENESIS_PROGRAM
-                },
-                {
-                        {21, 0, "Game Gear"},
-                        {
-                                "Sega - Game Gear",                         // No-Intro
-                                "Sega Game Gear", "Game Gear", "GameGear", "GG",
-                        },
-                        {".zip", ".gg"},
-                        "Sega - Game Gear",
-                        PPPEMU_GENESIS_PROGRAM
-                },
         };
+#ifdef PPPEMU_NES_PROGRAM
+        systems.push_back({
+                {3, 0, "NES"},
+                {
+                        "Nintendo - Nintendo Entertainment System",     // No-Intro
+                        "Nintendo Entertainment System", "Nintendo NES",
+                        "Nintendo - Family Computer", "Family Computer", "Famicom",
+                        "FC", "NES",
+                },
+                {".zip", ".nes", ".unf", ".unif"},
+                "Nintendo - Nintendo Entertainment System",
+                PPPEMU_NES_PROGRAM
+        });
+#endif
+#ifdef PPPEMU_GENESIS_PROGRAM
+        // sega consoles: all run by the genesis program (Genesis Plus GX)
+        systems.push_back({
+                {1, 0, "Mega Drive"},
+                {
+                        "Sega - Mega Drive - Genesis",              // No-Intro
+                        "Sega Mega Drive", "Sega Genesis",
+                        "Mega Drive", "MegaDrive", "Genesis",
+                        "Sega MD", "MD", "GEN", "Genesis - Mega Drive",
+                },
+                {".zip", ".md", ".smd", ".gen", ".bin", ".mdx"},
+                "Sega - Mega Drive - Genesis",
+                PPPEMU_GENESIS_PROGRAM
+        });
+        systems.push_back({
+                {2, 0, "Master System"},
+                {
+                        "Sega - Master System - Mark III",          // No-Intro
+                        "Sega Master System", "Master System", "MasterSystem",
+                        "Sega Mark III", "Mark III", "SMS",
+                },
+                {".zip", ".sms"},
+                "Sega - Master System - Mark III",
+                PPPEMU_GENESIS_PROGRAM
+        });
+        systems.push_back({
+                {21, 0, "Game Gear"},
+                {
+                        "Sega - Game Gear",                         // No-Intro
+                        "Sega Game Gear", "Game Gear", "GameGear", "GG",
+                },
+                {".zip", ".gg"},
+                "Sega - Game Gear",
+                PPPEMU_GENESIS_PROGRAM
+        });
+        // cd images: no ".bin" here (the tracks of a ".cue" would be listed as games),
+        // the bios files are needed in /data/pppemu/pgen/bios/ (bios_CD_U.bin, _E, _J)
+        systems.push_back({
+                {20, 0, "Sega CD"},
+                {
+                        "Sega - Mega-CD - Sega CD",                 // Redump / libretro
+                        "Sega Mega-CD", "Sega Mega CD", "Mega-CD", "Mega CD", "MegaCD",
+                        "Sega CD", "SegaCD", "SCD",
+                },
+                {".chd", ".cue", ".iso"},
+                "Sega - Mega-CD - Sega CD",
+                PPPEMU_GENESIS_PROGRAM
+        });
+#endif
+        return systems;
     }
 #endif
 };

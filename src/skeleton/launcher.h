@@ -36,6 +36,9 @@ namespace pemu {
 
     LaunchArgs parseLaunchArgs(int argc, char **argv);
 
+    // "smb://user:password@host/..." -> "smb://user:***@host/..." (for the log)
+    std::string hidePassword(const std::string &text);
+
     // this program's own path, given to the other program to come back here
     std::string selfProgramPath();
 

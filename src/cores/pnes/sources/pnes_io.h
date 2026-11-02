@@ -21,8 +21,10 @@ namespace c2d {
             return "ux0:/data/pnes/";
         }
 #elif __PS4__
+        // pppEmu: the nes program ships inside the pppEmu package, its saves and
+        // settings live in a sub folder of pppEmu's data folder
         std::string getDataPath() override {
-            return "/data/pnes/";
+            return "/data/pppemu/pnes/";
         }
 #ifndef NDEBUG
         std::string getRomFsPath() override {

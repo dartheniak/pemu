@@ -3,6 +3,7 @@
 //
 
 #include <cstring>
+#include <algorithm>
 #include <cerrno>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -29,6 +30,16 @@ using namespace pemu;
 
 static bool startsWith(const char *s, const char *prefix) {
     return strncmp(s, prefix, strlen(prefix)) == 0;
+}
+
+std::string pemu::hidePassword(const std::string &text) {
+    // network paths carry the share password ("smb://user:password@..."): not written to the log
+    std::string shown = text;
+    const size_t scheme = shown.find("://");
+    const size_t at = scheme == std::string::npos ? scheme : shown.find('@', scheme);
+    const size_t colon = at == std::string::npos ? at : shown.find(':', scheme + 3);
+    if (colon != std::string::npos && colon < at) shown.replace(colon + 1, at - colon - 1, "***");
+    return shown;
 }
 
 LaunchArgs pemu::parseLaunchArgs(int argc, char **argv) {
@@ -75,7 +86,7 @@ std::string pemu::selfProgramPath() {
 
 bool pemu::execProgram(const std::string &program, const std::vector<std::string> &args, std::string *error) {
     logLine("launcher: starting %s", program.c_str());
-    for (const auto &a: args) logLine("launcher:   %s", a.c_str());
+    for (const auto &a: args) logLine("launcher:   %s", hidePassword(a).c_str());
 
     std::vector<const char *> argv;
 #ifdef __PS4__
@@ -98,6 +109,36 @@ bool pemu::execProgram(const std::string &program, const std::vector<std::string
     if (error) *error = std::string("could not start the program (") + strerror(errno) + ")";
 #endif
     return false;
+}
+
+// file names in a ".cue" sheet: FILE "Game (Track 01).bin" BINARY
+static std::vector<std::string> cueTracks(const std::string &cuePath) {
+    std::vector<std::string> tracks;
+    FILE *f = fopen(cuePath.c_str(), "r");
+    if (!f) return tracks;
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        std::string l = line;
+        const size_t k = l.find_first_not_of(" \t");
+        if (k == std::string::npos || Utility::toLower(l.substr(k, 5)) != "file ") continue;
+        std::string name;
+        const size_t q1 = l.find('"', k);
+        const size_t q2 = q1 == std::string::npos ? q1 : l.find('"', q1 + 1);
+        if (q2 != std::string::npos) {
+            name = l.substr(q1 + 1, q2 - q1 - 1);
+        } else {
+            // no quotes: FILE track.bin BINARY
+            const size_t s = l.find_first_not_of(" \t", k + 5);
+            const size_t e = s == std::string::npos ? s : l.find_first_of(" \t\r\n", s);
+            if (s != std::string::npos) name = l.substr(s, e == std::string::npos ? std::string::npos : e - s);
+        }
+        for (auto &c: name) if (c == '\\') c = '/';
+        if (!name.empty() && std::find(tracks.begin(), tracks.end(), name) == tracks.end()) {
+            tracks.push_back(name);
+        }
+    }
+    fclose(f);
+    return tracks;
 }
 
 // a launch waiting for the ui to be closed (see main.cpp)
@@ -143,6 +184,28 @@ bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
                                            ui->flip();
                                            return true;
                                        }, &error);
+        // cd image as ".cue": its track files ("FILE "Game (Track 1).bin" BINARY") are needed too
+        if (!fullPath.empty() && Utility::endsWith(Utility::toLower(fullPath), ".cue")) {
+            const std::string folder = game.path.find('/') != std::string::npos
+                                       ? game.path.substr(0, game.path.find_last_of('/') + 1) : "";
+            const auto tracks = cueTracks(fullPath);
+            for (size_t i = 0; i < tracks.size() && !fullPath.empty(); i++) {
+                progress->setMessage("Downloading track " + std::to_string(i + 1) + " / " +
+                                     std::to_string(tracks.size()) + "...");
+                progress->setProgress(0);
+                ui->flip();
+                if (SmbIo::fetchToCache(game.romsPath, folder + tracks[i], cacheDir,
+                                        [ui](uint64_t done, uint64_t total) {
+                                            const float p = total > 0 ? (float) done / (float) total : 1.0f;
+                                            ui->getUiProgressBox()->setProgress(p);
+                                            ui->flip();
+                                            return true;
+                                        }, &error).empty()) {
+                    error = tracks[i] + ": " + error;
+                    fullPath.clear();
+                }
+            }
+        }
         progress->setVisibility(Visibility::Hidden);
         if (fullPath.empty()) {
             ui->getUiMessageBox()->show("NETWORK ERROR", error.empty() ? "DOWNLOAD FAILED" : error, "OK");

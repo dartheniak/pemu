@@ -307,7 +307,17 @@ bool Artwork::downloadDatabase(const ProgressCb &progress, std::string *error) {
         }
         const std::string url = "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/" +
                                 std::string(databaseFields[i]) + "/" + urlEncode(m_system) + ".dat";
-        if (httpGet(url, folder + databaseFields[i] + ".dat", error) != 200) {
+        const std::string path = folder + databaseFields[i] + ".dat";
+        const int code = httpGet(url, path, error);
+        if (code == 404) {
+            // libretro has no such file for this console (Sega CD...): nothing to show,
+            // an empty file says it was checked (not downloaded again before ARTWORK_DB_MAX_AGE_DAYS)
+            logLine("Artwork: no %s information for %s", databaseFields[i], m_system.c_str());
+            if (FILE *f = fopen(path.c_str(), "w")) fclose(f);
+            if (error) error->clear();
+            continue;
+        }
+        if (code != 200) {
             printf("Artwork: database %s: %s\n", url.c_str(), error ? error->c_str() : "");
             return false;
         }

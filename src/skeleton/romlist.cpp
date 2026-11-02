@@ -104,6 +104,8 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
         const std::string display = SmbIo::toDisplayUrl(netPath);
         setLoadingText("Connecting to %s...", display.c_str());
         bool anyFound = false;
+        const size_t gamesBefore = gameList->games.size();
+        const size_t warningsBefore = warnings.size();
         for (size_t i = 0; i < systems.size(); i++) {
             const auto &sys = systems[i];
             SmbIo::SystemFolders folders;
@@ -128,6 +130,9 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
             for (const auto &url: folders.urls) {
                 appendSmb(url, sys.system, folders.scanSubFolders ? SMB_MAX_FOLDER_DEPTH : 0, sys.extensions);
             }
+        }
+        if (anyFound && warnings.size() == warningsBefore && gameList->games.size() == gamesBefore) {
+            warnings.push_back("Network: connected, but no games found in " + display + ".");
         }
         if (!anyFound) {
             std::string names;
@@ -489,9 +494,8 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
 
     if (online && roms.empty()) {
         // connected fine but nothing to show: say so instead of failing silently
+        // (one console folder being empty is normal: the warning is given if the whole share is empty)
         setLoadingText("Network: no games found in %s", display.c_str());
-        warnings.push_back("Network: connected, but no games found in " + display + ".");
-        ui->delay(3000);
     }
 
     // remote gamelist.xml (cached locally, refreshed when it changes)

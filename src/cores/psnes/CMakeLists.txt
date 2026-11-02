@@ -158,27 +158,34 @@ add_dependencies(${PROJECT_NAME}.data.skin ${PROJECT_NAME}.data)
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}.data.skin)
 
 #####################
-# pppEmu: mega drive / genesis games run in the genesis program (pgen), shipped in the
-# same package and started with the game (see src/skeleton/launcher.h)
+# pppEmu: other consoles' games run in other pEMU programs (pgen: sega consoles, pnes: nes),
+# shipped in the same package and started with the game (see src/skeleton/launcher.h)
 #####################
-if (PLATFORM_PS4 AND TARGET pgen)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PPPEMU_GENESIS_PROGRAM="/app0/pgen.bin")
-    # pgen as a second signed program of the package: /app0/pgen.bin
-    set(PPPEMU_AUTH_INFO "000000000000000000000000001C004000FF000000000080000000000000000000000000000000000000008000400040000000000000008000000000000000080040FFFF000000F000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
-    add_custom_target(${PROJECT_NAME}.pgen
-            COMMAND ${CMAKE_COMMAND} -E env "OO_PS4_TOOLCHAIN=${OPENORBIS}" "${OPENORBIS}/bin/create-fself"
-                "-in=$<TARGET_FILE:pgen>" "-out=pgen.oelf" "--eboot" "pgen.bin"
-                "--paid" "0x3800000000000035" "--authinfo" "${PPPEMU_AUTH_INFO}"
-            COMMAND ${CMAKE_COMMAND} -E copy pgen.bin ${CMAKE_CURRENT_BINARY_DIR}/data_romfs/pgen.bin
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            DEPENDS pgen
-            VERBATIM
-    )
-    # after the data copy (it empties data_romfs), before the package
-    add_dependencies(${PROJECT_NAME}.pgen ${PROJECT_NAME}.data.skin)
-    add_dependencies(${PROJECT_NAME}_pkg ${PROJECT_NAME}.pgen)
-elseif (PLATFORM_LINUX AND TARGET pgen)
-    # desktop test build: the genesis program from the build directory
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PPPEMU_GENESIS_PROGRAM="$<TARGET_FILE:pgen>")
-    add_dependencies(${PROJECT_NAME} pgen)
-endif ()
+set(PPPEMU_AUTH_INFO "000000000000000000000000001C004000FF000000000080000000000000000000000000000000000000008000400040000000000000008000000000000000080040FFFF000000F000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+function(pppemu_add_program core define)
+    if (NOT TARGET ${core})
+        return()
+    endif ()
+    if (PLATFORM_PS4)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE ${define}="/app0/${core}.bin")
+        # the program as a second signed program of the package: /app0/<core>.bin
+        add_custom_target(${PROJECT_NAME}.${core}
+                COMMAND ${CMAKE_COMMAND} -E env "OO_PS4_TOOLCHAIN=${OPENORBIS}" "${OPENORBIS}/bin/create-fself"
+                    "-in=$<TARGET_FILE:${core}>" "-out=${core}.oelf" "--eboot" "${core}.bin"
+                    "--paid" "0x3800000000000035" "--authinfo" "${PPPEMU_AUTH_INFO}"
+                COMMAND ${CMAKE_COMMAND} -E copy ${core}.bin ${CMAKE_CURRENT_BINARY_DIR}/data_romfs/${core}.bin
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                DEPENDS ${core}
+                VERBATIM
+        )
+        # after the data copy (it empties data_romfs), before the package
+        add_dependencies(${PROJECT_NAME}.${core} ${PROJECT_NAME}.data.skin)
+        add_dependencies(${PROJECT_NAME}_pkg ${PROJECT_NAME}.${core})
+    elseif (PLATFORM_LINUX)
+        # desktop test build: the program from the build directory
+        target_compile_definitions(${PROJECT_NAME} PRIVATE ${define}="$<TARGET_FILE:${core}>")
+        add_dependencies(${PROJECT_NAME} ${core})
+    endif ()
+endfunction()
+pppemu_add_program(pgen PPPEMU_GENESIS_PROGRAM)
+pppemu_add_program(pnes PPPEMU_NES_PROGRAM)
