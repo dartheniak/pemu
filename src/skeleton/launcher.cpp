@@ -267,6 +267,9 @@ bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
     }
 #endif
 
+    // the list as it is now: reused when coming back (no network scan)
+    ui->getUiRomList()->getRomList()->saveListCache();
+
     // the other program uses the same display and controller settings
     const std::string settings = ui->getIo()->getDataPath() + SHARED_SETTINGS_FILE;
     writeSharedSettings(ui->getConfig(), settings);

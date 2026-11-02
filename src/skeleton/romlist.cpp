@@ -91,10 +91,16 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     m_scanned.clear();
     warnings.clear();
 
+    // pppEmu: back from a game run by another program: the list saved before it started
+    // (no network scan, see saveListCache)
+    const bool fromCache = useListCache && loadListCache();
+    if (!fromCache) {
+
 #ifdef __SMB__
-    // network games downloaded in a previous session
+    // network games downloaded in a previous session (kept when coming back from a game:
+    // the same session)
     auto clearCache = cfg->get(PEMUConfig::OptId::NET_SMB_CLEAR_CACHE);
-    if (clearCache && clearCache->getInteger()) {
+    if (clearCache && clearCache->getInteger() && !useListCache) {
         ui->getIo()->removeDir(getSmbCachePath());
     }
 
@@ -208,6 +214,8 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
             a->applyDatabase(gameList);
         }
     }
+
+    } // !fromCache
 
     updateFilterOptions();
 
@@ -324,6 +332,143 @@ static bool hasExtension(const std::string &name, const std::vector<std::string>
         if (lower.size() >= le.size() && lower.compare(lower.size() - le.size(), le.size(), le) == 0) return true;
     }
     return false;
+}
+
+// list cache: one line per game, tab separated, "\t" "\n" and "\\" escaped
+static std::string cacheEscape(const std::string &v) {
+    std::string out;
+    for (char c: v) {
+        if (c == '\\') out += "\\\\";
+        else if (c == '\t') out += "\\t";
+        else if (c == '\n') out += "\\n";
+        else if (c != '\r') out += c;
+    }
+    return out;
+}
+
+static std::vector<std::string> cacheSplit(const std::string &line) {
+    std::vector<std::string> fields(1);
+    for (size_t i = 0; i < line.size(); i++) {
+        const char c = line[i];
+        if (c == '\t') {
+            fields.emplace_back();
+        } else if (c == '\\' && i + 1 < line.size()) {
+            const char n = line[++i];
+            fields.back() += n == 't' ? '\t' : n == 'n' ? '\n' : n;
+        } else if (c != '\n' && c != '\r') {
+            fields.back() += c;
+        }
+    }
+    return fields;
+}
+
+#define LIST_CACHE_VERSION "pppemu-list-1"
+
+std::string RomList::getListCachePath() {
+    return ui->getIo()->getDataPath() + "cache/list.cache";
+}
+
+bool RomList::saveListCache() {
+    ui->getIo()->create(ui->getIo()->getDataPath() + "cache");
+    FILE *f = fopen(getListCachePath().c_str(), "w");
+    if (!f) return false;
+    fprintf(f, "%s\n", LIST_CACHE_VERSION);
+    auto write = [f](const char *kind, const Game &g) {
+        const std::vector<std::string> v = {
+                kind, std::to_string(g.id), std::to_string(g.system.id), std::to_string(g.system.parentId),
+                g.system.name, g.romsPath, g.path, g.name, g.available ? "1" : "0", g.cloneOf,
+                g.players, std::to_string(g.playersInt), std::to_string(g.rating), std::to_string(g.rotation),
+                g.resolution, std::to_string(g.editor.id), g.editor.name, std::to_string(g.developer.id),
+                g.developer.name, std::to_string(g.genre.id), g.genre.name, g.date, g.synopsis
+        };
+        std::string line;
+        for (size_t i = 0; i < v.size(); i++) line += (i ? "\t" : "") + cacheEscape(v[i]);
+        fprintf(f, "%s\n", line.c_str());
+    };
+    for (const auto &g: gameList->games) write("G", g);
+    for (const auto &g: hiddenFiles) write("H", g);
+    fclose(f);
+    logLine("RomList: list saved (%zu games)", gameList->games.size());
+    return true;
+}
+
+bool RomList::loadListCache() {
+    FILE *f = fopen(getListCachePath().c_str(), "r");
+    if (!f) return false;
+    std::string line;
+    char buf[4096];
+    bool first = true, ok = false;
+    std::vector<Game> games, hidden;
+    while (fgets(buf, sizeof(buf), f)) {
+        line += buf;
+        if (line.empty() || line.back() != '\n') continue;   // long line, read on
+        if (first) {
+            first = false;
+            ok = line.rfind(LIST_CACHE_VERSION, 0) == 0;
+            line.clear();
+            if (!ok) break;
+            continue;
+        }
+        const auto v = cacheSplit(line);
+        line.clear();
+        if (v.size() < 23) continue;
+        Game g;
+        g.id = std::stoul(v[1]);
+        g.system = {atoi(v[2].c_str()), atoi(v[3].c_str()), v[4]};
+        g.romsPath = v[5];
+        g.path = v[6];
+        g.name = v[7];
+        g.available = v[8] == "1";
+        g.cloneOf = v[9];
+        g.players = v[10];
+        g.playersInt = atoi(v[11].c_str());
+        g.rating = atoi(v[12].c_str());
+        g.rotation = atoi(v[13].c_str());
+        g.resolution = v[14];
+        g.editor = {atoi(v[15].c_str()), v[16]};
+        g.developer = {atoi(v[17].c_str()), v[18]};
+        g.genre = {atoi(v[19].c_str()), v[20]};
+        g.date = v[21];
+        g.synopsis = v[22];
+        (v[0] == "H" ? hidden : games).push_back(g);
+    }
+    fclose(f);
+    if (!ok || games.empty()) {
+        logLine("RomList: no usable list cache");
+        return false;
+    }
+
+    // the list and its filters (systems, developers, genres...)
+    gameList->games = games;
+    hiddenFiles = hidden;
+    for (const auto &g: gameList->games) {
+        if (std::find(gameList->romPaths.begin(), gameList->romPaths.end(), g.romsPath) == gameList->romPaths.end()) {
+            gameList->romPaths.push_back(g.romsPath);
+        }
+        if (!gameList->systemList.find(g.system.id)) gameList->systemList.systems.push_back(g.system);
+        if (g.developer.name != "UNKNOWN" && gameList->findDeveloperByName(g.developer.name).name != g.developer.name) {
+            gameList->developers.push_back(g.developer);
+        }
+        if (g.editor.name != "UNKNOWN" && gameList->findEditorByName(g.editor.name).name != g.editor.name) {
+            gameList->editors.push_back(g.editor);
+        }
+        if (g.genre.name != "UNKNOWN" && gameList->findGenreByName(g.genre.name).name != g.genre.name) {
+            gameList->genres.push_back(g.genre);
+        }
+        if (!g.date.empty() && std::find(gameList->dates.begin(), gameList->dates.end(), g.date) == gameList->dates.end()) {
+            gameList->dates.push_back(g.date);
+        }
+        if (g.playersInt > 0 && std::find(gameList->players.begin(), gameList->players.end(), g.playersInt) == gameList->players.end()) {
+            gameList->players.push_back(g.playersInt);
+        }
+        if (g.rating > 0 && std::find(gameList->ratings.begin(), gameList->ratings.end(), g.rating) == gameList->ratings.end()) {
+            gameList->ratings.push_back(g.rating);
+        }
+    }
+    m_games_count = gameList->games.size();
+    m_games_available_count = gameList->getAvailableCount();
+    logLine("RomList: list loaded from cache (%zu games, no network scan)", gameList->games.size());
+    return true;
 }
 
 void RomList::applyRomsetLists() {

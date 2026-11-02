@@ -84,6 +84,8 @@ int main(int argc, char **argv) {
     // ui
     const auto romList = new PEMURomList(pemu_ui, cfg->getCoreVersion(), cfg->getCoreSupportedExt());
     if (game.path.empty()) {
+        // pppEmu: back from a game run by another program, same list as before
+        romList->useListCache = launchArgs.pppemu && launchArgs.rom.empty() && !launchArgs.select.empty();
         romList->build();
         romList->initFav();
     } else {

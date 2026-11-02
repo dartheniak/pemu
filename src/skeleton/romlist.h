@@ -55,6 +55,12 @@ namespace pemu {
         // sort the filter lists (genres, developers...) and update the filter menu options
         void updateFilterOptions();
 
+        // pppEmu: the list as it is now, saved before a game runs in another program, and
+        // reused when coming back (useListCache): no network scan, the downloaded games kept
+        bool saveListCache();
+
+        bool useListCache = false;
+
         // arcade bios / device files (neogeo.zip...): not games, hidden from the list, but
         // downloaded with network arcade games (see launcher.cpp)
         std::vector<ss_api::Game> hiddenFiles;
@@ -67,6 +73,10 @@ namespace pemu {
         virtual std::vector<std::string> getUsbRoots() { return {"/mnt/usb0/", "/mnt/usb1/"}; }
 
     protected:
+        std::string getListCachePath();
+
+        bool loadListCache();
+
         // arcade consoles (CoreSystem::romsetList): full names, parents, year, company, bios hidden
         void applyRomsetLists();
 
