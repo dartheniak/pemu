@@ -368,6 +368,28 @@ std::string RomList::getListCachePath() {
     return ui->getIo()->getDataPath() + "cache/list.cache";
 }
 
+// network paths without the password in the cache file: "smb://user:password@host" ->
+// "smb://user@host" ("keep" = false: no "***"), the password is put back when loading
+static std::string hidePassword(const std::string &path, bool) {
+    const size_t scheme = path.find("://");
+    const size_t at = scheme == std::string::npos ? scheme : path.find('@', scheme);
+    const size_t colon = at == std::string::npos ? at : path.find(':', scheme + 3);
+    if (colon == std::string::npos || colon > at) return path;
+    return path.substr(0, colon) + path.substr(at);
+}
+
+std::string RomList::withPassword(const std::string &path) {
+    // the share url with the password ("smb://user:password@host/..."), without ("smb://user@host/...")
+    const std::string net = ui->getConfig()->getNetworkRomPath();
+    const std::string netNoPass = hidePassword(net, false);
+    const size_t start = net.find("://");
+    if (start == std::string::npos || net == netNoPass) return path;
+    const size_t host = net.find('/', start + 3);
+    const std::string prefix = net.substr(0, host), prefixNoPass = hidePassword(prefix, false);
+    if (path.rfind(prefixNoPass, 0) == 0) return prefix + path.substr(prefixNoPass.size());
+    return path;
+}
+
 bool RomList::saveListCache() {
     ui->getIo()->create(ui->getIo()->getDataPath() + "cache");
     FILE *f = fopen(getListCachePath().c_str(), "w");
@@ -376,7 +398,7 @@ bool RomList::saveListCache() {
     auto write = [f](const char *kind, const Game &g) {
         const std::vector<std::string> v = {
                 kind, std::to_string(g.id), std::to_string(g.system.id), std::to_string(g.system.parentId),
-                g.system.name, g.romsPath, g.path, g.name, g.available ? "1" : "0", g.cloneOf,
+                g.system.name, hidePassword(g.romsPath, false), g.path, g.name, g.available ? "1" : "0", g.cloneOf,
                 g.players, std::to_string(g.playersInt), std::to_string(g.rating), std::to_string(g.rotation),
                 g.resolution, std::to_string(g.editor.id), g.editor.name, std::to_string(g.developer.id),
                 g.developer.name, std::to_string(g.genre.id), g.genre.name, g.date, g.synopsis
@@ -415,7 +437,7 @@ bool RomList::loadListCache() {
         Game g;
         g.id = std::stoul(v[1]);
         g.system = {atoi(v[2].c_str()), atoi(v[3].c_str()), v[4]};
-        g.romsPath = v[5];
+        g.romsPath = withPassword(v[5]);
         g.path = v[6];
         g.name = v[7];
         g.available = v[8] == "1";

@@ -156,6 +156,11 @@ namespace pemu {
         // ("Nintendo - Super Nintendo Entertainment System"). Empty: no artwork downloads.
         virtual std::string getLibretroSystem() { return ""; }
 
+        // share password (stored encrypted in config.cfg, see secret.h)
+        std::string getNetworkPassword();
+
+        void setNetworkPassword(const std::string &plain);
+
         // getCoreFolderNames() + the user's SYSTEM_FOLDER setting
         std::vector<std::string> getNetworkFolderNames();
 

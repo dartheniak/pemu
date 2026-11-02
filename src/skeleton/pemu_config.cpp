@@ -3,6 +3,7 @@
 //
 
 #include "pemu.h"
+#include "secret.h"
 #include "pemu_config.h"
 
 using namespace c2d::config;
@@ -390,12 +391,30 @@ std::string PEMUConfig::getNetworkRomPath() {
     auto server = get(NET_SMB_SERVER);
     auto folder = get(NET_SMB_FOLDER);
     auto user = get(NET_SMB_USER);
-    auto pass = get(NET_SMB_PASSWORD);
-    if (!server || !folder || !user || !pass) return "";
-    return SmbIo::buildUrl(server->getString(), folder->getString(), user->getString(), pass->getString());
+    if (!server || !folder || !user) return "";
+    return SmbIo::buildUrl(server->getString(), folder->getString(), user->getString(), getNetworkPassword());
 #else
     return "";
 #endif
+}
+
+std::string PEMUConfig::getNetworkPassword() {
+    auto pass = get(NET_SMB_PASSWORD);
+    if (!pass || pass->getString().empty()) return "";
+    const std::string dataPath = p_renderer->getIo()->getDataPath();
+    std::string plain;
+    secret::decrypt(dataPath, pass->getString(), &plain);
+    // a password from an older version (plain text): stored encrypted from now on
+    if (!secret::isEncrypted(pass->getString())) {
+        setNetworkPassword(plain);
+        save();
+    }
+    return plain;
+}
+
+void PEMUConfig::setNetworkPassword(const std::string &plain) {
+    auto pass = get(NET_SMB_PASSWORD);
+    if (pass) pass->setString(secret::encrypt(p_renderer->getIo()->getDataPath(), plain));
 }
 
 std::vector<std::string> PEMUConfig::getNetworkFolderNames() {

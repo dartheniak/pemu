@@ -504,8 +504,10 @@ void UiMenu::editNetworkOption(Option *option) {
             break;
     }
 
+    const bool isPassword = option->getId() == PEMUConfig::OptId::NET_SMB_PASSWORD;
     std::string value;
-    if (!TextInput::get(ui, title, option->getString(), kind, &value)) return;
+    const std::string initial = isPassword ? ui->getConfig()->getNetworkPassword() : option->getString();
+    if (!TextInput::get(ui, title, initial, kind, &value)) return;
 
     // "\\192.168.1.20\Roms\SNES" pasted in the server field: split it
     if (option->getId() == PEMUConfig::OptId::NET_SMB_SERVER) {
@@ -523,7 +525,9 @@ void UiMenu::editNetworkOption(Option *option) {
         value = v;
     }
 
-    option->setString(value);
+    // the password is stored encrypted (see secret.h)
+    if (isPassword) ui->getConfig()->setNetworkPassword(value);
+    else option->setString(value);
     needSave = true;
     updateLines();
     ui->getUiStatusBox()->show("USE TEST_CONNECTION TO CHECK, THEN RESTART THE APP TO LOAD THE GAMES");

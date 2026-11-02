@@ -40,9 +40,13 @@ rather than its name: the PS4 usually can't resolve local computer names.
   start. With it OFF, already downloaded games are reused (if unchanged on the
   server) and stay playable when the server is offline.
 - **Saves:** SRAM, save states and per-game settings are stored on the PS4
-  (`/data/pppemu/sram`, `saves`, `configs`), named after the rom file.
-- **Security:** the password is stored in plain text in
-  `/data/pppemu/config.cfg`. Use a read-only account for the share.
+  (`/data/pppemu/psnes/sram`, `saves`, `configs` for Super Nintendo, the other
+  emulators in their own folders), named after the rom file.
+- **Security:** the password is stored encrypted in `/data/pppemu/config.cfg` ("enc1:..."),
+  with a random key kept in its own file (`/data/pppemu/.pppemu_key`): config.cfg can be
+  copied or shown without giving the password away. Someone with the whole data folder
+  (key file included) could still decrypt it, so a read-only account for the share is
+  still a good idea. A password typed directly in config.cfg is encrypted at the next start.
 
 ## Config file (advanced)
 

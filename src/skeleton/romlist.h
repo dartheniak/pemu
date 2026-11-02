@@ -75,6 +75,9 @@ namespace pemu {
     protected:
         std::string getListCachePath();
 
+        // "smb://user@host/..." -> "smb://user:password@host/..." (current network settings)
+        std::string withPassword(const std::string &path);
+
         bool loadListCache();
 
         // arcade consoles (CoreSystem::romsetList): full names, parents, year, company, bios hidden
