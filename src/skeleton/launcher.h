@@ -43,6 +43,8 @@ namespace pemu {
         bool demoSound = true;
         // demo mode: back in the launcher, start the next demo game
         bool demoNext = false;
+        // save state to load once the game started (list: L1, STATES)
+        std::string state;
         // true if started by the launcher or returning to it
         bool pppemu = false;
     };
@@ -64,7 +66,12 @@ namespace pemu {
     // if "game" belongs to a console run by another program: get it ready (network games are
     // downloaded) and close the ui, main() then starts that program (runPendingLaunch).
     // Returns false if the game is run by this program, true otherwise (errors are shown).
-    bool launchInOtherProgram(UiMain *ui, const ss_api::Game &game);
+    // "state": a save state of the other program to load once the game started
+    bool launchInOtherProgram(UiMain *ui, const ss_api::Game &game, const std::string &state = "");
+
+    // folder of the files (saves, save states...) of the program running this game's console,
+    // empty if it's this program ("/data/pppemu/pgen/")
+    std::string programDataPath(UiMain *ui, const ss_api::Game &game);
 
     // replace this program with "program" (args without the program name).
     // Only returns on errors.

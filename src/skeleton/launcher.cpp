@@ -28,6 +28,7 @@ using namespace pemu;
 #define ARG_SELECT "--pppemu-select="
 #define ARG_SETTINGS "--pppemu-settings="
 #define ARG_SYSTEM "--pppemu-system="
+#define ARG_STATE "--pppemu-state="
 #define ARG_DEMO "--pppemu-demo="
 #define ARG_DEMO_NEXT "--pppemu-demo-next"
 #define SHARED_SETTINGS_FILE "shared_settings.cfg"
@@ -72,6 +73,8 @@ LaunchArgs pemu::parseLaunchArgs(int argc, char **argv) {
             args.demoSeconds = atoi(v);
             const char *comma = strchr(v, ',');
             args.demoSound = !comma || atoi(comma + 1) != 0;
+        } else if (startsWith(argv[i], ARG_STATE)) {
+            args.state = argv[i] + strlen(ARG_STATE);
         } else if (startsWith(argv[i], ARG_SYSTEM)) {
             args.system = argv[i] + strlen(ARG_SYSTEM);
         } else if (startsWith(argv[i], ARG_SETTINGS)) {
@@ -164,7 +167,23 @@ static std::vector<std::string> cueTracks(const std::string &cuePath) {
 static std::string s_pendingProgram;
 static std::vector<std::string> s_pendingArgs;
 
-bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
+std::string pemu::programDataPath(UiMain *ui, const ss_api::Game &game) {
+    for (const auto &sys: ui->getConfig()->getSystems()) {
+        if (sys.system.id != game.system.id || sys.program.empty()) continue;
+        std::string name = sys.program.substr(sys.program.find_last_of('/') + 1);
+#ifdef __PS4__
+        // "/app0/pgen.bin" -> "/data/pppemu/pgen/" (see the programs' io classes)
+        if (Utility::endsWith(name, ".bin")) name = name.substr(0, name.size() - 4);
+        return ui->getIo()->getDataPath() + name + "/";
+#else
+        // desktop builds: the program's folder (its working directory, see runPendingLaunch)
+        return sys.program.substr(0, sys.program.find_last_of('/') + 1);
+#endif
+    }
+    return "";
+}
+
+bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game, const std::string &state) {
     // console of this game, run by another program?
     std::string program;
     for (const auto &sys: ui->getConfig()->getSystems()) {
@@ -282,6 +301,7 @@ bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
             ARG_SETTINGS + settings,
             ARG_SYSTEM + ui->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString(),
     };
+    if (!state.empty()) s_pendingArgs.push_back(ARG_STATE + state);
     if (demo::isActive()) {
         s_pendingArgs.push_back(ARG_DEMO + std::to_string(demo::getSeconds()) + "," + (demo::hasSound() ? "1" : "0"));
     }

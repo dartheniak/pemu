@@ -106,6 +106,11 @@ int main(int argc, char **argv) {
         // pppEmu demo mode: shown for a while, no saves written (see skeleton/demo.h)
         if (launchArgs.demoSeconds > 0) demo::begin(launchArgs.demoSeconds, launchArgs.demoSound);
         uiEmu->load(game);
+        // pppEmu: save state chosen in the launcher's list (L1, STATES)
+        if (!launchArgs.state.empty()) {
+            const bool ok = uiState->loadStateCore(launchArgs.state.c_str());
+            logLine("main: state %s: %s", launchArgs.state.c_str(), ok ? "loaded" : "not loaded");
+        }
     }
 
     // problems found while listing the games (network unreachable, no games...)

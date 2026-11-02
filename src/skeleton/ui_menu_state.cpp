@@ -74,7 +74,9 @@ public:
     void setRom(const ss_api::Game &game) {
         memset(path, 0, MAX_PATH);
         memset(shot, 0, MAX_PATH);
-        const std::string dir = ui->getConfig()->getEmuDataPath();
+        // pppEmu: games of other consoles: their program's save states
+        std::string dir = programDataPath(ui, game);
+        if (dir.empty()) dir = ui->getConfig()->getEmuDataPath();
         snprintf(path, 1023, "%ssaves/%s-%i.state",
                  dir.c_str(), Utility::removeExt(Utility::baseName(game.path)).c_str(), id);
         snprintf(shot, 1023, "%ssaves/%s-%i.png",
@@ -251,8 +253,11 @@ bool UiMenuState::onInput(c2d::Input::Player *players) {
             if (game.available) {
                 UiState *state = uiStateList->getSelection();
                 if (state->exist) {
-                    // pppEmu: games of other consoles run in their own program (no state loading here)
-                    if (launchInOtherProgram(ui, game)) return true;
+                    // pppEmu: games of other consoles run in their own program, it loads the state
+                    if (launchInOtherProgram(ui, game, state->path)) {
+                        setVisibility(Visibility::Hidden);
+                        return true;
+                    }
                     ui->getConfig()->loadGame(game);
                     ui->getUiEmu()->load(game);
                     state->loadState();
