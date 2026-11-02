@@ -30,6 +30,12 @@ public:
 
     bool hasSecondImage() const { return synoBox != nullptr; }
 
+    // move the visible info lines up, over the hidden ones
+    void packInfoLines();
+
+    std::vector<c2d::Text *> infoLines;
+    std::vector<float> infoLinesY;
+
     void load(const ss_api::Game &game = ss_api::Game());
 
     pemu::UiMain *main = nullptr;

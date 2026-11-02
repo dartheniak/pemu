@@ -37,6 +37,14 @@ UIRomInfo::UIRomInfo(UiMain *u, UIRomList *uiRList, Font *fnt, int fntSize)
         cloneofText = addInfoBoxText({"MAIN", "ROM_INFOS", "CLONEOF_TEXT"});
         filenameText = addInfoBoxText({"MAIN", "ROM_INFOS", "FILENAME_TEXT"});
         Rectangle::add(infoBox);
+        // skin order and positions, so visible lines can be packed (no gap for hidden ones)
+        for (auto t: {systemText, developerText, editorText, dateText, genreText,
+                      playersText, ratingText, cloneofText, filenameText}) {
+            if (t) {
+                infoLines.push_back(t);
+                infoLinesY.push_back(t->getPosition().y);
+            }
+        }
     } else {
         delete (infoBox);
     }
@@ -132,6 +140,14 @@ bool UIRomInfo::loadTexture(const Game &game) {
     return true;
 }
 
+void UIRomInfo::packInfoLines() {
+    size_t slot = 0;
+    for (auto t: infoLines) {
+        if (!t->isVisible()) continue;
+        t->setPosition(t->getPosition().x, infoLinesY[slot++]);
+    }
+}
+
 void UIRomInfo::loadSecondImage(const Game &game) {
     if (!synoBox) return;
 
@@ -206,11 +222,15 @@ void UIRomInfo::load(const Game &game) {
         showText(dateText, "Date: " + game.date);
         showText(genreText, "Genre: " + game.genre.name);
         showText(playersText, "Players: " + game.players);
-        showText(ratingText, "Rating: " + std::to_string(game.rating));
-        showText(cloneofText, "Clone Of: " + (game.cloneOf.empty() ? "NONE" : game.cloneOf));
+        // no rating / not a clone: line hidden instead of "Rating: 0" / "Clone Of: NONE"
+        if (game.rating > 0) showText(ratingText, "Rating: " + std::to_string(game.rating));
+        else hideText(ratingText);
+        if (!game.cloneOf.empty()) showText(cloneofText, "Clone Of: " + game.cloneOf);
+        else hideText(cloneofText);
         showText(filenameText, "File: " + game.path);
         showText(synoText, game.synopsis);
         loadSecondImage(game);
+        packInfoLines();
     }
 }
 
