@@ -135,6 +135,15 @@ target_compile_options(${PROJECT_NAME} PRIVATE ${SNES9X_CFLAGS})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PSNES_INC} ${SNES9X_INC} ${UNZIP_INC} ${JMA_INC})
 target_link_libraries(${PROJECT_NAME} cross2dui ${SNES9X_LDFLAGS})
 
+# pppEmu: the package says "enter button chosen by the system software" (param.sfo ATTRIBUTE
+# 0x20), so the ps4 keyboard and other system dialogs confirm with the console's button
+# (cross outside Japan) instead of circle. add_pkg (toolchain) takes the attribute as 6th argument.
+if (PLATFORM_PS4)
+    function(add_pkg project pkgdir title_id title version)
+        _add_pkg("${project}" "${pkgdir}" "${title_id}" "${title}" "${version}" 32)
+    endfunction()
+endif ()
+
 # include libcross2d targets
 include(${CMAKE_SOURCE_DIR}/external/libcross2d/cmake/targets.cmake)
 

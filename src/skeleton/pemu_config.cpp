@@ -134,7 +134,7 @@ PEMUConfig::PEMUConfig(Renderer *renderer, const std::string &name, int version)
     }
 
     emu_grp.addOption({"SCALING_MODE", {"AUTO", "ASPECT", "INTEGER"}, 1, EMU_SCALING_MODE});
-    emu_grp.addOption({"FILTER", {std::string("POINT"), std::string("LINEAR")}, 1, EMU_FILTER});
+    emu_grp.addOption({"FILTER", {std::string("POINT"), std::string("LINEAR")}, 0, EMU_FILTER});
     if (const auto shaderList = p_renderer->getShaderList()) {
         emu_grp.addOption({"EFFECT", shaderList->getNames(), 0, EMU_SHADER});
     } else {
