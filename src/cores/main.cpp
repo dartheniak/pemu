@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
         uiRomList->selectGame(launchArgs.select);
     }
 
-    pemu::logLine("main: ui ready");
+    pemu::logLine("main: ui ready, screen %ix%i", (int) pemu_ui->getSize().x, (int) pemu_ui->getSize().y);
     while (!pemu_ui->done) {
         pemu_ui->flip();
     }

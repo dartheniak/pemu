@@ -47,8 +47,8 @@ public:
         return {UI_FILTER_SYSTEM};
     }
 
-    // pppEmu: super nintendo games run here, mega drive / genesis games in the genesis
-    // program shipped in the same package (see skeleton/launcher.h)
+    // pppEmu: super nintendo games run here, mega drive / genesis, master system and game gear
+    // games in the genesis program shipped in the same package (see skeleton/launcher.h)
     std::vector<CoreSystem> getSystems() override {
         return {
                 {getNetworkSystem(), getNetworkFolderNames(), getCoreSupportedExt(), getLibretroSystem(), ""},
@@ -62,6 +62,28 @@ public:
                         },
                         {".zip", ".md", ".smd", ".gen", ".bin", ".mdx"},
                         "Sega - Mega Drive - Genesis",
+                        PPPEMU_GENESIS_PROGRAM
+                },
+                // also run by the genesis program (Genesis Plus GX)
+                {
+                        {2, 0, "Master System"},
+                        {
+                                "Sega - Master System - Mark III",          // No-Intro
+                                "Sega Master System", "Master System", "MasterSystem",
+                                "Sega Mark III", "Mark III", "SMS",
+                        },
+                        {".zip", ".sms"},
+                        "Sega - Master System - Mark III",
+                        PPPEMU_GENESIS_PROGRAM
+                },
+                {
+                        {21, 0, "Game Gear"},
+                        {
+                                "Sega - Game Gear",                         // No-Intro
+                                "Sega Game Gear", "Game Gear", "GameGear", "GG",
+                        },
+                        {".zip", ".gg"},
+                        "Sega - Game Gear",
                         PPPEMU_GENESIS_PROGRAM
                 },
         };

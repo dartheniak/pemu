@@ -145,9 +145,55 @@ std::string UIRomList::getPreview(const Game &game, UIRomList::PreviewType type)
     return {};
 }
 
+void UIRomList::updateBackground() {
+    // "Mega Drive" -> "background_mega_drive.jpg" (or .png), data folder first
+    std::string path;
+    const std::string sys = pMain->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString();
+    if (sys != "ALL") {
+        std::string slug;
+        for (unsigned char c: sys) {
+            if (isalnum(c)) slug += (char) tolower(c);
+            else if (!slug.empty() && slug.back() != '_') slug += '_';
+        }
+        while (!slug.empty() && slug.back() == '_') slug.pop_back();
+        for (const auto &dir: pMain->getSkin()->getPaths()) {
+            for (const char *ext: {".jpg", ".png"}) {
+                const std::string p = dir + "background_" + slug + ext;
+                if (path.empty() && pMain->getIo()->exist(p)) path = p;
+            }
+        }
+    }
+
+    if (path == mBackgroundPath) return;
+    mBackgroundPath = path;
+    if (mBackground) {
+        delete (mBackground);
+        mBackground = nullptr;
+    }
+    if (!path.empty()) {
+        auto tex = new C2DTexture(path);
+        if (tex->available && tex->getSize().x > 0 && tex->getSize().y > 0) {
+            const float scaling = std::min(getSize().x / tex->getSize().x, getSize().y / tex->getSize().y);
+            tex->setScale(scaling, scaling);
+            tex->setFilter(Texture::Filter::Linear);
+            add(tex);
+            tex->setLayer(-1);  // behind everything (after add: add() sorts before inserting)
+            mBackground = tex;
+            logLine("UIRomList: background %s", path.c_str());
+        } else {
+            delete (tex);
+        }
+    }
+    // the skin's own background only when there's no console background
+    if (getTexture()) {
+        getTexture()->setVisibility(mBackground ? Visibility::Hidden : Visibility::Visible);
+    }
+}
+
 void UIRomList::updateRomList() {
     filterRomList();
     sortRomList();
+    updateBackground();
 
     std::string sys = pMain->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString();
     int systemId = sys == "ALL" ? -1 : pRomList->gameList->systemList.findByName(sys).id;

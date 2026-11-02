@@ -11,6 +11,9 @@ public:
 
     bool load();
 
+    // texture of the skin ("texture" option), null if none
+    c2d::Texture *getTexture() { return pTex; }
+
 private:
     std::vector<std::string> mTree;
     pemu::UiMain *pMain;

@@ -70,6 +70,12 @@ namespace pemu {
         bool mShowSystemText = false;
         bool mArtworkDbChecked = false;
 
+        // per console background ("background_mega_drive.jpg" in the skin folder), shown
+        // instead of the skin's own background when that console is selected (L2 / R2)
+        void updateBackground();
+        c2d::C2DTexture *mBackground = nullptr;
+        std::string mBackgroundPath;
+
         c2d::C2DClock mTimerLoadInfo;
 #ifdef __3DS__
         int mTimerLoadInfoDelay = 1000;

@@ -75,14 +75,20 @@ On Linux the text fields are typed in the terminal the app was started from
 
 ## Several consoles (pppEmu)
 
-pppEmu lists Super Nintendo and Mega Drive / Genesis games together (L2 / R2 switch
-between ALL and one console). Each console's games are found by folder name, on the
+pppEmu lists Super Nintendo, Mega Drive / Genesis, Master System and Game Gear games
+together (L2 / R2 switch between ALL and one console). Each console's games are found by folder name, on the
 network share, in `/data/pppemu/roms/` and on USB drives:
 
 - Super Nintendo: `SNES`, `Super Nintendo`, `Nintendo - Super Nintendo Entertainment System`...
 - Mega Drive / Genesis: `Mega Drive`, `Genesis`, `MD`, `Sega - Mega Drive - Genesis`...
+- Master System: `Master System`, `SMS`, `Sega - Master System - Mark III`...
+- Game Gear: `Game Gear`, `GG`, `Sega - Game Gear`...
 
-Super Nintendo games run in pppEmu itself. Mega Drive games run in the Genesis program
+Backgrounds (in `/data/pppemu/skins/default/`, 1920x1080 jpg or png): `background.jpg`
+for ALL, and one per console page: `background_super_nintendo.jpg`,
+`background_mega_drive.jpg`, `background_master_system.jpg`, `background_game_gear.jpg`.
+
+Super Nintendo games run in pppEmu itself. Sega games run in the Genesis program
 shipped in the same package (`/app0/pgen.bin`): pppEmu closes, the game starts, and quitting
 the game (in-game menu, QUIT) brings back pppEmu on the same game. The Genesis program keeps
 its saves and settings in `/data/pppemu/pgen/`. Artwork is stored per console in
