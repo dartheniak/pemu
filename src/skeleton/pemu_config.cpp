@@ -326,6 +326,10 @@ std::vector<std::string> PEMUConfig::getNetworkFolderNames() {
     return names;
 }
 
+std::vector<PEMUConfig::CoreSystem> PEMUConfig::getSystems() {
+    return {{getNetworkSystem(), getNetworkFolderNames(), getCoreSupportedExt(), getLibretroSystem(), ""}};
+}
+
 ss_api::System PEMUConfig::getNetworkSystem() {
     // single system cores (psnes, pnes...) only have their own rom path
     const auto paths = getRomPaths();

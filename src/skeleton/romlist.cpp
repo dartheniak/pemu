@@ -53,13 +53,27 @@ RomList::RomList(UiMain *_ui, const std::string &emuVersion, const std::vector<s
     gameList = new GameList();
     gameListFav = new GameList();
 
-    // debug log (<data>/pppsnes.log), see pemu_log.h
+    // debug log (<data>/pppemu.log), see pemu_log.h
     logInit(ui->getIo()->getDataPath());
     logLine("RomList: start");
 
-    // artwork and game information downloads (cores declaring a libretro system)
-    const std::string system = ui->getConfig()->getLibretroSystem();
-    if (!system.empty()) artwork = new Artwork(ui->getIo(), system);
+    // artwork and game information downloads (consoles with a libretro name).
+    // Several consoles: each one has its own media folder ("media/Sega - Mega Drive - Genesis/")
+    const auto systems = ui->getConfig()->getSystems();
+    for (const auto &sys: systems) {
+        if (sys.libretro.empty()) continue;
+        const std::string media = ui->getIo()->getDataPath() + "media/" +
+                                  (systems.size() > 1 ? sys.libretro + "/" : "");
+        artworks.push_back(new Artwork(ui->getIo(), sys.libretro, sys.system.id, media));
+    }
+    artwork = artworks.empty() ? nullptr : artworks.front();
+}
+
+Artwork *RomList::getArtwork(const Game &game) {
+    for (auto a: artworks) {
+        if (a->getSystemId() == game.system.id) return a;
+    }
+    return nullptr;
 }
 
 void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
@@ -83,27 +97,45 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
         ui->getIo()->removeDir(getSmbCachePath());
     }
 
-    // network rom path from the NETWORK settings: only this console's folder(s) inside it
+    // network rom path from the NETWORK settings: only the consoles' folders inside it
+    const auto systems = cfg->getSystems();
     const std::string netPath = cfg->getNetworkRomPath();
     if (!netPath.empty()) {
         const std::string display = SmbIo::toDisplayUrl(netPath);
         setLoadingText("Connecting to %s...", display.c_str());
-        SmbIo::SystemFolders folders;
-        std::string error;
-        if (SmbIo::findSystemFolders(netPath, cfg->getNetworkFolderNames(), &folders, &error)) {
-            if (!folders.found && !cfg->getNetworkFolderNames().empty()) {
+        bool anyFound = false;
+        for (size_t i = 0; i < systems.size(); i++) {
+            const auto &sys = systems[i];
+            SmbIo::SystemFolders folders;
+            std::string error;
+            if (!SmbIo::findSystemFolders(netPath, sys.folderNames, &folders, &error)) {
+                // unreachable: appendSmb shows the error (and cached games if any)
+                appendSmb(netPath, systems[0].system, SMB_MAX_FOLDER_DEPTH, systems[0].extensions);
+                anyFound = true;
+                break;
+            }
+            if (folders.found || sys.folderNames.empty()) {
+                anyFound = true;
+            } else if (systems.size() > 1 || i > 0) {
+                continue;   // several consoles: loose files can't be told apart, only folders are used
+            } else {
                 setLoadingText("Network: no %s folder found in %s, using its files only",
-                               cfg->getNetworkSystem().name.c_str(), display.c_str());
-                warnings.push_back("Network: no " + cfg->getNetworkSystem().name + " folder found in " + display +
+                               sys.system.name.c_str(), display.c_str());
+                warnings.push_back("Network: no " + sys.system.name + " folder found in " + display +
                                    ", only the games directly in it are listed.");
                 ui->delay(3000);
             }
             for (const auto &url: folders.urls) {
-                appendSmb(url, cfg->getNetworkSystem(), folders.scanSubFolders ? SMB_MAX_FOLDER_DEPTH : 0);
+                appendSmb(url, sys.system, folders.scanSubFolders ? SMB_MAX_FOLDER_DEPTH : 0, sys.extensions);
             }
-        } else {
-            // unreachable: appendSmb shows the error (and cached games if any)
-            appendSmb(netPath, cfg->getNetworkSystem(), SMB_MAX_FOLDER_DEPTH);
+        }
+        if (!anyFound) {
+            std::string names;
+            for (const auto &sys: systems) {
+                const std::string n = sys.folderNames.empty() ? sys.system.name : sys.folderNames.back();
+                names += (names.empty() ? "" : ", ") + n;
+            }
+            warnings.push_back("Network: no console folder (" + names + ") found in " + display + ".");
         }
     }
 #endif
@@ -111,7 +143,7 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     for (const auto &p: romPaths) {
         if (Utility::startWith(Utility::toLower(p.path), "smb://")) {
 #ifdef __SMB__
-            appendSmb(p.path, p.system, SMB_MAX_FOLDER_DEPTH);
+            appendSmb(p.path, p.system, SMB_MAX_FOLDER_DEPTH, filters);
 #else
             printf("RomList::build: skipping %s (built without smb support)\n", p.path.c_str());
 #endif
@@ -121,7 +153,10 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
         // cores with known folder names: same rules as the network (console folder found by name,
         // sub folders scanned). Other cores (pfbneo...) keep pemu's original behaviour.
         if (useFolderRules) {
-            appendLocalRoot(p.path, p.system, true);
+            for (size_t i = 0; i < systems.size(); i++) {
+                // games directly in the roms folder: this program's own console
+                appendLocalRoot(p.path, systems[i], i == 0);
+            }
             continue;
         }
 
@@ -141,10 +176,10 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     }
 
     // usb drives: only this console's folder(s), wherever they are in the first levels
-    // ("/mnt/usb0/Roms/SNES", "/mnt/usb0/pppsnes/roms/Nintendo - Super Nintendo...")
+    // ("/mnt/usb0/Roms/SNES", "/mnt/usb0/pppemu/roms/Nintendo - Super Nintendo...")
     if (useFolderRules) {
         for (const auto &usb: getUsbRoots()) {
-            appendLocalRoot(usb, cfg->getNetworkSystem(), false);
+            for (const auto &sys: systems) appendLocalRoot(usb, sys, false);
         }
     }
 
@@ -158,9 +193,11 @@ void RomList::build(const ss_api::GameList::GameAddedCb &cb) {
     }
 
     // downloaded game information (developer, genre, year...) for games that don't have it
-    if (artwork && artwork->loadDatabase()) {
-        setLoadingText("Applying game information...");
-        artwork->applyDatabase(gameList);
+    for (auto a: artworks) {
+        if (a->loadDatabase()) {
+            setLoadingText("Applying game information...");
+            a->applyDatabase(gameList);
+        }
     }
 
     updateFilterOptions();
@@ -196,16 +233,25 @@ void RomList::updateFilterOptions() {
     std::sort(gameList->resolutions.begin(), gameList->resolutions.end(), Api::sortByName);
     std::sort(gameList->dates.begin(), gameList->dates.end(), Api::sortByName);
 
-    // add filtering options
+    // add filtering options (the current choice is kept when it's still in the new list)
     printf("RomList::updateFilterOptions: add filtering options...\n");
     auto grp = cfg->getGroup(PEMUConfig::GrpId::UI_FILTERING);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_SYSTEM)->setArray(gameList->systemList.getNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_GENRE)->setArray(gameList->getGenreNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_DATE)->setArray(gameList->getDates(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_EDITOR)->setArray(gameList->getEditorNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_DEVELOPER)->setArray(gameList->getDeveloperNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_PLAYERS)->setArray(gameList->getPlayersNames(), 0);
-    grp->getOption(PEMUConfig::OptId::UI_FILTER_RATING)->setArray(gameList->getRatingNames(), 0);
+    auto setFilter = [grp](int id, const std::vector<std::string> &values) {
+        auto opt = grp->getOption(id);
+        const std::string current = opt->getString();
+        int index = 0;
+        for (size_t i = 0; i < values.size(); i++) {
+            if (values[i] == current) index = (int) i;
+        }
+        opt->setArray(values, index);
+    };
+    setFilter(PEMUConfig::OptId::UI_FILTER_SYSTEM, gameList->systemList.getNames());
+    setFilter(PEMUConfig::OptId::UI_FILTER_GENRE, gameList->getGenreNames());
+    setFilter(PEMUConfig::OptId::UI_FILTER_DATE, gameList->getDates());
+    setFilter(PEMUConfig::OptId::UI_FILTER_EDITOR, gameList->getEditorNames());
+    setFilter(PEMUConfig::OptId::UI_FILTER_DEVELOPER, gameList->getDeveloperNames());
+    setFilter(PEMUConfig::OptId::UI_FILTER_PLAYERS, gameList->getPlayersNames());
+    setFilter(PEMUConfig::OptId::UI_FILTER_RATING, gameList->getRatingNames());
 }
 
 void RomList::initFav() {
@@ -262,7 +308,7 @@ static bool hasExtension(const std::string &name, const std::vector<std::string>
 }
 
 void RomList::addGames(const std::string &path, const System &system, std::vector<std::string> roms,
-                       const std::string &gameListXml) {
+                       const std::string &gameListXml, const std::vector<std::string> &exts) {
     auto onGameAdded = [this](Game *game) {
         if (p_cb) p_cb(game);
         m_games_count++;
@@ -278,7 +324,7 @@ void RomList::addGames(const std::string &path, const System &system, std::vecto
     if (!gameListXml.empty()) {
         const size_t start = gameList->games.size();
         // empty roms path: sscrap must not list the folder itself, we already did (with sub folders)
-        gameList->append(gameListXml, "", false, filters, system, false, nullptr);
+        gameList->append(gameListXml, "", false, exts, system, false, nullptr);
         for (size_t i = start; i < gameList->games.size(); i++) {
             Game &g = gameList->games[i];
             g.romsPath = path;
@@ -316,7 +362,8 @@ void RomList::addGames(const std::string &path, const System &system, std::vecto
     setLoadingText("Games: %li / %li", m_games_available_count, m_games_count);
 }
 
-void RomList::appendLocal(const std::string &dir, const System &system, int maxDepth) {
+void RomList::appendLocal(const std::string &dir, const System &system, int maxDepth,
+                          const std::vector<std::string> &exts) {
     std::string root = dir;
     if (root.empty() || root.back() != '/') root += "/";
 
@@ -333,7 +380,7 @@ void RomList::appendLocal(const std::string &dir, const System &system, int maxD
             const std::string name = rel.empty() ? f.name : rel + "/" + f.name;
             if (f.type == c2d::Io::Type::Directory) {
                 if (depthLeft > 0) scan(d + f.name + "/", name, depthLeft - 1);
-            } else if (hasExtension(f.name, filters)) {
+            } else if (hasExtension(f.name, exts)) {
                 roms.push_back(name);
             }
         }
@@ -341,27 +388,28 @@ void RomList::appendLocal(const std::string &dir, const System &system, int maxD
     scan(root, "", maxDepth);
 
     const std::string xml = ui->getIo()->exist(root + "gamelist.xml") ? root + "gamelist.xml" : "";
-    addGames(root, system, roms, xml);
+    addGames(root, system, roms, xml, exts);
     logLine("RomList::appendLocal: %s, %zu roms (gamelist.xml: %s)",
            root.c_str(), roms.size(), xml.empty() ? "no" : "yes");
 }
 
-void RomList::appendLocalRoot(const std::string &root, const System &system, bool allowLooseFiles) {
+void RomList::appendLocalRoot(const std::string &root, const PEMUConfig::CoreSystem &sys, bool allowLooseFiles) {
     auto io = ui->getIo();
     if (io->getType(root) != c2d::Io::Type::Directory) return;
 
-    const auto names = ui->getConfig()->getNetworkFolderNames();
+    const auto &names = sys.folderNames;
+    const auto &system = sys.system;
     std::string dir = root;
     while (dir.size() > 1 && dir.back() == '/') dir.pop_back();
     const std::string rootName = dir.substr(dir.find_last_of('/') + 1);
 
     // the folder is this console's folder itself
     if (matchesFolderName(rootName, names)) {
-        appendLocal(root, system, LOCAL_MAX_FOLDER_DEPTH);
+        appendLocal(root, system, LOCAL_MAX_FOLDER_DEPTH, sys.extensions);
         return;
     }
 
-    // this console's folder(s) inside it: "Roms/Nintendo - Super Nintendo...", "pppsnes/roms/SNES"...
+    // this console's folder(s) inside it: "Roms/Nintendo - Super Nintendo...", "pppemu/roms/SNES"...
     std::vector<std::string> found;
     std::function<void(const std::string &, int)> find;
     find = [&](const std::string &d, int depthLeft) {
@@ -380,20 +428,21 @@ void RomList::appendLocalRoot(const std::string &root, const System &system, boo
     if (start.back() != '/') start += "/";
     find(start, LOCAL_MAX_CONTAINER_DEPTH);
 
-    for (const auto &f: found) appendLocal(f, system, LOCAL_MAX_FOLDER_DEPTH);
+    for (const auto &f: found) appendLocal(f, system, LOCAL_MAX_FOLDER_DEPTH, sys.extensions);
 
     // the app's own roms folder: games directly in it are always used (old behaviour)
-    if (allowLooseFiles) appendLocal(start, system, 0);
+    if (allowLooseFiles) appendLocal(start, system, 0, sys.extensions);
 }
 
 #ifdef __SMB__
 
-void RomList::appendSmb(const std::string &path, const System &system, int maxDepth) {
+void RomList::appendSmb(const std::string &path, const System &system, int maxDepth,
+                        const std::vector<std::string> &exts) {
     const std::string display = SmbIo::toDisplayUrl(path);
     setLoadingText("Connecting to %s...", display.c_str());
 
     // list roms (and the top level gamelist.xml), sub folders included
-    std::vector<std::string> wanted = filters;
+    std::vector<std::string> wanted = exts;
     wanted.emplace_back("gamelist.xml");
     std::vector<SmbIo::File> remote;
     std::string error;
@@ -433,7 +482,7 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
     for (const auto &f: remote) {
         if (Utility::toLower(f.name) == "gamelist.xml") {
             hasGameList = true;
-        } else if (SmbIo::matchExt(f.name, filters)) {
+        } else if (SmbIo::matchExt(f.name, exts)) {
             roms.push_back(f.name);
         }
     }
@@ -452,7 +501,7 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
                                        SmbIo::getCacheDir(getSmbCachePath(), path), nullptr, &error);
     }
 
-    addGames(path, system, roms, localXml);
+    addGames(path, system, roms, localXml, exts);
     logLine("RomList::appendSmb: %s, %zu files (gamelist.xml: %s, online: %s)",
            display.c_str(), remote.size(), hasGameList ? "yes" : "no", online ? "yes" : "no");
 }
@@ -461,7 +510,7 @@ void RomList::appendSmb(const std::string &path, const System &system, int maxDe
 
 RomList::~RomList() {
     printf("~RomList()\n");
-    delete (artwork);
+    for (auto a: artworks) delete (a);
     delete (gameList);
     delete (gameListFav);
 }

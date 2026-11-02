@@ -31,6 +31,9 @@ namespace pemu {
 
         virtual RomList *getRomList();
 
+        // select the game "romsPath + path" in the list, false if it's not there
+        bool selectGame(const std::string &fullPath);
+
         // image type chosen in the ARTWORK menu
         Artwork::Type getArtworkType();
 

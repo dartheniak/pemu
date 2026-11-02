@@ -19,11 +19,11 @@
 #include "smb_io.h"
 #endif
 
+#include "pemu_config.h"
 #include "artwork.h"
 #include "romlist.h"
 #include "skin.h"
 #include "ui_video.h"
-#include "pemu_config.h"
 
 #include "skin/SkinnedRectangle.h"
 #include "skin/SkinnedText.h"

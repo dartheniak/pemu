@@ -152,7 +152,7 @@ void UIRomInfo::loadSecondImage(const Game &game) {
     if (!synoBox) return;
 
     std::string path;
-    auto artwork = uiRomList->getRomList()->artwork;
+    auto artwork = uiRomList->getRomList()->getArtwork(game);
     if (artwork && !game.path.empty() && game.synopsis.empty()) {
         path = artwork->findImage(game, uiRomList->getSecondArtworkType());
     }

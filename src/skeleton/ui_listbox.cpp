@@ -210,19 +210,20 @@ void UIListBox::down() {
 }
 
 void UIListBox::setSelection(int new_index) {
+    const int count = (int) games.size();
+    if (new_index > count - 1) new_index = count - 1;
     if (new_index < 0) new_index = 0;
-    if (new_index > (int) games.size()) new_index = (int) games.size() - 1;
-    if (new_index < max_lines / 2) {
+
+    if (count <= max_lines || new_index < max_lines / 2) {
+        // whole list on screen, or near its top: no scrolling needed
         file_index = 0;
-        highlight_index = 0;
-    } else if (new_index > (int) games.size() - max_lines / 2) {
-        highlight_index = max_lines - 1;
-        file_index = (int) games.size() - 1 - highlight_index;
-        if (highlight_index >= (int) games.size()) {
-            highlight_index = (int) games.size() - 1;
-            file_index = 0;
-        }
+        highlight_index = new_index;
+    } else if (new_index > count - 1 - (max_lines - max_lines / 2)) {
+        // near the end: last page
+        file_index = count - max_lines;
+        highlight_index = new_index - file_index;
     } else {
+        // centered
         highlight_index = max_lines / 2;
         file_index = new_index - highlight_index;
     }

@@ -1,0 +1,205 @@
+//
+// pppEmu: games of other consoles run in another program of the package (see launcher.h)
+//
+
+#include <cstring>
+#include <cerrno>
+#include <unistd.h>
+#include <sys/stat.h>
+#include "pemu.h"
+#include "launcher.h"
+#include "pemu_log.h"
+
+#ifdef __SMB__
+#include "smb_io.h"
+#endif
+
+#ifdef __PS4__
+extern "C" int sceSystemServiceLoadExec(const char *path, const char *args[]);
+#endif
+
+using namespace c2d;
+using namespace pemu;
+
+#define ARG_ROM "--pppemu-rom="
+#define ARG_RETURN "--pppemu-return="
+#define ARG_SELECT "--pppemu-select="
+// desktop builds only: data folder of the program to go back to (its working directory)
+#define ARG_CWD "--pppemu-cwd="
+
+static bool startsWith(const char *s, const char *prefix) {
+    return strncmp(s, prefix, strlen(prefix)) == 0;
+}
+
+LaunchArgs pemu::parseLaunchArgs(int argc, char **argv) {
+    LaunchArgs args;
+    std::string cwd;
+    // every entry is checked: the ps4 may or may not put the program path first
+    for (int i = 0; i < argc; i++) {
+        if (!argv[i]) continue;
+        if (startsWith(argv[i], ARG_ROM)) {
+            args.rom = argv[i] + strlen(ARG_ROM);
+            args.pppemu = true;
+        } else if (startsWith(argv[i], ARG_RETURN)) {
+            args.returnTo = argv[i] + strlen(ARG_RETURN);
+            args.pppemu = true;
+        } else if (startsWith(argv[i], ARG_SELECT)) {
+            args.select = argv[i] + strlen(ARG_SELECT);
+            args.pppemu = true;
+        } else if (startsWith(argv[i], ARG_CWD)) {
+            cwd = argv[i] + strlen(ARG_CWD);
+        }
+    }
+    // pEMU's own command line: "program <rom file>"
+    if (!args.pppemu && argc > 1 && argv[1] && argv[1][0] != '-') {
+        args.rom = argv[1];
+    }
+#ifndef __PS4__
+    // keep the launcher's data folder (desktop builds use the working directory)
+    if (!cwd.empty()) args.returnTo += std::string("\n") + cwd;
+#endif
+    return args;
+}
+
+std::string pemu::selfProgramPath() {
+#ifdef __PS4__
+    return "/app0/eboot.bin";
+#else
+    char buf[1024];
+    const ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0) return "";
+    buf[n] = 0;
+    return buf;
+#endif
+}
+
+bool pemu::execProgram(const std::string &program, const std::vector<std::string> &args, std::string *error) {
+    logLine("launcher: starting %s", program.c_str());
+    for (const auto &a: args) logLine("launcher:   %s", a.c_str());
+
+    std::vector<const char *> argv;
+#ifdef __PS4__
+    for (const auto &a: args) argv.push_back(a.c_str());
+    argv.push_back(nullptr);
+    const int res = sceSystemServiceLoadExec(program.c_str(), argv.data());
+    // only returns on errors
+    logLine("launcher: sceSystemServiceLoadExec failed (0x%08x)", (unsigned) res);
+    if (error) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "could not start the program (0x%08x)", (unsigned) res);
+        *error = msg;
+    }
+#else
+    argv.push_back(program.c_str());
+    for (const auto &a: args) argv.push_back(a.c_str());
+    argv.push_back(nullptr);
+    execv(program.c_str(), (char *const *) argv.data());
+    logLine("launcher: exec failed (%s)", strerror(errno));
+    if (error) *error = std::string("could not start the program (") + strerror(errno) + ")";
+#endif
+    return false;
+}
+
+// a launch waiting for the ui to be closed (see main.cpp)
+static std::string s_pendingProgram;
+static std::vector<std::string> s_pendingArgs;
+
+bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
+    // console of this game, run by another program?
+    std::string program;
+    for (const auto &sys: ui->getConfig()->getSystems()) {
+        if (sys.system.id == game.system.id) {
+            program = sys.program;
+            break;
+        }
+    }
+    if (program.empty()) return false;
+
+    struct stat st{};
+    if (stat(program.c_str(), &st) != 0) {
+        ui->getUiMessageBox()->show("ERROR", "The program for " + game.system.name +
+                                             " games is missing (" + program + ").", "OK");
+        return true;
+    }
+
+    std::string fullPath = game.romsPath + game.path;
+#ifdef __SMB__
+    if (SmbIo::isSmbPath(game.romsPath)) {
+        // network game: downloaded to the local cache first, the other program opens a local file
+        auto progress = ui->getUiProgressBox();
+        progress->setTitle(game.name);
+        progress->setMessage("Downloading...");
+        progress->setProgress(0);
+        progress->setVisibility(Visibility::Visible);
+        progress->setLayer(1000);
+        ui->flip();
+        std::string error;
+        const std::string cacheDir = SmbIo::getCacheDir(ui->getUiRomList()->getRomList()->getSmbCachePath(),
+                                                        game.romsPath);
+        fullPath = SmbIo::fetchToCache(game.romsPath, game.path, cacheDir,
+                                       [ui](uint64_t done, uint64_t total) {
+                                           const float p = total > 0 ? (float) done / (float) total : 1.0f;
+                                           ui->getUiProgressBox()->setProgress(p);
+                                           ui->flip();
+                                           return true;
+                                       }, &error);
+        progress->setVisibility(Visibility::Hidden);
+        if (fullPath.empty()) {
+            ui->getUiMessageBox()->show("NETWORK ERROR", error.empty() ? "DOWNLOAD FAILED" : error, "OK");
+            return true;
+        }
+    }
+#endif
+
+    s_pendingProgram = program;
+    s_pendingArgs = {
+            ARG_ROM + fullPath,
+            ARG_RETURN + selfProgramPath(),
+            ARG_SELECT + game.romsPath + game.path,
+    };
+#ifndef __PS4__
+    s_pendingArgs.push_back(ARG_CWD + ui->getIo()->getDataPath());
+#endif
+    logLine("launcher: %s game, closing the launcher for %s", game.system.name.c_str(), program.c_str());
+
+    // the settings (last game, filters...) are saved and the ui closed as usual,
+    // then main() starts the other program (see runPendingLaunch)
+    ui->getConfig()->save();
+    ui->done = true;
+    return true;
+}
+
+bool pemu::runPendingLaunch() {
+    {
+        if (s_pendingProgram.empty()) return false;
+#ifndef __PS4__
+        // desktop builds: the other program uses its own folder as data folder
+        const std::string dir = s_pendingProgram.substr(0, s_pendingProgram.find_last_of('/') + 1);
+        if (!dir.empty() && chdir(dir.c_str()) != 0) {
+            logLine("launcher: chdir %s failed", dir.c_str());
+        }
+#endif
+        std::string error;
+        execProgram(s_pendingProgram, s_pendingArgs, &error);
+        return false;
+    }
+}
+
+void pemu::returnToLauncher(const LaunchArgs &args) {
+    if (args.returnTo.empty()) return;
+    std::string program = args.returnTo;
+#ifndef __PS4__
+    const size_t nl = program.find('\n');
+    if (nl != std::string::npos) {
+        const std::string cwd = program.substr(nl + 1);
+        program = program.substr(0, nl);
+        if (!cwd.empty() && chdir(cwd.c_str()) != 0) {
+            logLine("launcher: chdir %s failed", cwd.c_str());
+        }
+    }
+#endif
+    std::vector<std::string> a;
+    if (!args.select.empty()) a.push_back(ARG_SELECT + args.select);
+    std::string error;
+    execProgram(program, a, &error);
+}

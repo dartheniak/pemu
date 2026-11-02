@@ -601,8 +601,7 @@ void UiMenu::testConnection() {
 
 void UiMenu::downloadArtwork() {
     auto romList = ui->getUiRomList()->getRomList();
-    auto artwork = romList->artwork;
-    if (!artwork) return;
+    if (romList->artworks.empty()) return;
 
     // save the settings now (the app may be closed from the ps4 menu during a long download)
     ui->getConfig()->save();
@@ -624,29 +623,38 @@ void UiMenu::downloadArtwork() {
         return !(players && (players[0].buttons & Input::Button::B));
     };
 
-    // 1. game information database (developer, genre, year...)
+    // 1. game information database (developer, genre, year...), one per console
     std::string error;
     bool cancelled = false;
-    const bool dbOk = artwork->downloadDatabase([&](int done, int total, const std::string &) {
-        progress->setMessage("Downloading game information (" + std::to_string(done) + "/" +
-                             std::to_string(total) + ")...");
-        progress->setProgress(total ? 0.1f * (float) done / (float) total : 0);
-        if (!keepGoing()) cancelled = true;
-        return !cancelled;
-    }, &error);
-
+    bool dbOk = true;
     int infoGames = 0;
-    if (dbOk && artwork->loadDatabase()) {
-        infoGames = artwork->applyDatabase(romList->gameList);
-        romList->updateFilterOptions();
+    const int dbCount = (int) romList->artworks.size();
+    for (int a = 0; a < dbCount && !cancelled; a++) {
+        auto artwork = romList->artworks[a];
+        std::string err;
+        const bool ok = artwork->downloadDatabase([&](int done, int total, const std::string &) {
+            progress->setMessage("Downloading game information (" + std::to_string(a * total + done) + "/" +
+                                 std::to_string(dbCount * total) + ")...");
+            progress->setProgress(total ? 0.1f * (float) (a * total + done) / (float) (dbCount * total) : 0);
+            if (!keepGoing()) cancelled = true;
+            return !cancelled;
+        }, &err);
+        if (!ok) {
+            dbOk = false;
+            if (error.empty()) error = err;
+        } else if (artwork->loadDatabase()) {
+            infoGames += artwork->applyDatabase(romList->gameList);
+        }
     }
+    romList->updateFilterOptions();
 
     // 2. images of the games that don't have one yet
     std::vector<Game> todo;
     const auto type = ui->getUiRomList()->getArtworkType();
     if (!cancelled) {
         for (const auto &g: romList->gameList->games) {
-            if (g.available && artwork->findImage(g, type).empty() && !artwork->isMissing(g, type)) {
+            auto artwork = romList->getArtwork(g);
+            if (g.available && artwork && artwork->findImage(g, type).empty() && !artwork->isMissing(g, type)) {
                 todo.push_back(g);
             }
         }
@@ -663,6 +671,7 @@ void UiMenu::downloadArtwork() {
             break;
         }
         std::string err;
+        auto artwork = romList->getArtwork(todo[i]);
         if (artwork->downloadImage(todo[i], type, &err)) {
             downloaded++;
             failedInRow = 0;

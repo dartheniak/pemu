@@ -40,6 +40,33 @@ public:
                 "SNES",     // last: shown with the first one in "folder not found" messages
         };
     }
+
+#ifdef PPPEMU_GENESIS_PROGRAM
+    // pppEmu: the system filter (L2 / R2 in the list) switches between consoles
+    std::vector<int> getCoreHiddenOptionToEnable() override {
+        return {UI_FILTER_SYSTEM};
+    }
+
+    // pppEmu: super nintendo games run here, mega drive / genesis games in the genesis
+    // program shipped in the same package (see skeleton/launcher.h)
+    std::vector<CoreSystem> getSystems() override {
+        return {
+                {getNetworkSystem(), getNetworkFolderNames(), getCoreSupportedExt(), getLibretroSystem(), ""},
+                {
+                        {1, 0, "Mega Drive"},
+                        {
+                                "Sega - Mega Drive - Genesis",              // No-Intro
+                                "Sega Mega Drive", "Sega Genesis",
+                                "Mega Drive", "MegaDrive", "Genesis",
+                                "Sega MD", "MD", "GEN", "Genesis - Mega Drive",
+                        },
+                        {".zip", ".md", ".smd", ".gen", ".bin", ".mdx"},
+                        "Sega - Mega Drive - Genesis",
+                        PPPEMU_GENESIS_PROGRAM
+                },
+        };
+    }
+#endif
 };
 
 #endif //PSNES_CONFIG_H

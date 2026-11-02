@@ -1,17 +1,17 @@
-# pppSnes: network roms (SMB / Samba / Windows shares)
+# pppEmu: network roms (SMB / Samba / Windows shares)
 
-pppSnes is a fork of pEMU's pSNES that can list and launch roms stored on a
+pppEmu is a fork of pEMU (pSNES + pGEN in one app) that can list and launch roms stored on a
 network share (Windows shared folder, Samba server, NAS). Roms are downloaded
 to a local cache when you launch them, so the emulator core always reads a
 normal local file.
 
-It installs as its own app (title id `PPPS00001`, data in `/data/pppsnes/`), so
+It installs as its own app (title id `PPPE00001`, data in `/data/pppemu/`), so
 it never conflicts with the official pSNES.
 
 ## Setup (in the app)
 
 1. Share a folder on your PC or NAS (SMB2 or SMB3).
-2. In pppSnes, open the main menu (OPTIONS / START) and go to **NETWORK**:
+2. In pppEmu, open the main menu (OPTIONS / START) and go to **NETWORK**:
    - **SERVER**: the PC or NAS address, e.g. `192.168.1.20`. You can also enter
      a full Windows path like `\\192.168.1.20\Roms\SNES`: it is split into
      SERVER and FOLDER automatically.
@@ -21,7 +21,7 @@ it never conflicts with the official pSNES.
      the app starts.
 3. Select **TEST_CONNECTION**. It reports how many games it found, or what went
    wrong (wrong password, share or folder not found, server unreachable...).
-4. Restart pppSnes: the network games appear in the list.
+4. Restart pppEmu: the network games appear in the list.
 
 Text is entered with the PS4 on-screen keyboard. Use the server's IP address
 rather than its name: the PS4 usually can't resolve local computer names.
@@ -34,20 +34,20 @@ rather than its name: the PS4 usually can't resolve local computer names.
   of other systems would otherwise be listed as SNES games.
 - **gamelist.xml:** if the FOLDER contains a `gamelist.xml` (EmulationStation
   format), names, genres and dates come from it.
-- **Launching:** the rom is downloaded to `/data/pppsnes/cache/smb/...` with a
+- **Launching:** the rom is downloaded to `/data/pppemu/cache/smb/...` with a
   progress bar, then started like a local file.
 - **Cache:** with CLEAR_CACHE_ON_START ON (default) the cache is emptied at each
   start. With it OFF, already downloaded games are reused (if unchanged on the
   server) and stay playable when the server is offline.
 - **Saves:** SRAM, save states and per-game settings are stored on the PS4
-  (`/data/pppsnes/sram`, `saves`, `configs`), named after the rom file.
+  (`/data/pppemu/sram`, `saves`, `configs`), named after the rom file.
 - **Security:** the password is stored in plain text in
-  `/data/pppsnes/config.cfg`. Use a read-only account for the share.
+  `/data/pppemu/config.cfg`. Use a read-only account for the share.
 
 ## Config file (advanced)
 
 Network paths can also be added by hand to the `ROMS` section of
-`/data/pppsnes/config.cfg`:
+`/data/pppemu/config.cfg`:
 
 ```
 SNES_NAS = ( "Super Nintendo", "0x00000004", "smb://user:password@192.168.1.20/Roms/SNES/" );
@@ -72,3 +72,18 @@ make -j$(nproc) psnes_pkg
 
 On Linux the text fields are typed in the terminal the app was started from
 (development fallback for the PS4 keyboard).
+
+## Several consoles (pppEmu)
+
+pppEmu lists Super Nintendo and Mega Drive / Genesis games together (L2 / R2 switch
+between ALL and one console). Each console's games are found by folder name, on the
+network share, in `/data/pppemu/roms/` and on USB drives:
+
+- Super Nintendo: `SNES`, `Super Nintendo`, `Nintendo - Super Nintendo Entertainment System`...
+- Mega Drive / Genesis: `Mega Drive`, `Genesis`, `MD`, `Sega - Mega Drive - Genesis`...
+
+Super Nintendo games run in pppEmu itself. Mega Drive games run in the Genesis program
+shipped in the same package (`/app0/pgen.bin`): pppEmu closes, the game starts, and quitting
+the game (in-game menu, QUIT) brings back pppEmu on the same game. The Genesis program keeps
+its saves and settings in `/data/pppemu/pgen/`. Artwork is stored per console in
+`/data/pppemu/media/<console>/`.

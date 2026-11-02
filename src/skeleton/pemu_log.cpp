@@ -8,10 +8,18 @@
 #include "pemu_log.h"
 
 static std::string s_logPath;
+static bool s_keep = false;
+
+void pemu::logKeepPrevious() {
+    s_keep = true;
+}
 
 void pemu::logInit(const std::string &dataPath) {
-    s_logPath = dataPath + "pppsnes.log";
-    if (FILE *f = fopen(s_logPath.c_str(), "w")) fclose(f);
+    s_logPath = dataPath + "pppemu.log";
+    if (!s_keep) {
+        if (FILE *f = fopen(s_logPath.c_str(), "w")) fclose(f);
+    }
+    s_keep = false;
 }
 
 void pemu::logLine(const char *fmt, ...) {

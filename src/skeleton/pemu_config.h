@@ -154,6 +154,24 @@ namespace pemu {
         // getCoreFolderNames() + the user's SYSTEM_FOLDER setting
         std::vector<std::string> getNetworkFolderNames();
 
+        // a console listed by this program (pppEmu lists several, run by different programs)
+        struct CoreSystem {
+            ss_api::System system;
+            // folder names its games are found in (see getCoreFolderNames)
+            std::vector<std::string> folderNames;
+            // rom file extensions (".sfc", ".md"...)
+            std::vector<std::string> extensions;
+            // libretro name for artwork downloads, empty: none
+            std::string libretro;
+            // program running its games: empty = this program, else the path of another
+            // program of the package ("/app0/pgen.bin"), started with the game (see launcher.h)
+            std::string program;
+        };
+
+        // consoles listed, the first one is this program's own console.
+        // Default: only this program's console.
+        virtual std::vector<CoreSystem> getSystems();
+
         std::vector<c2d::Input::ButtonMapping> getKeyboardMapping(int player, bool isGame = false);
 
         std::vector<c2d::Input::ButtonMapping> getJoystickMapping(int player, bool isGame = false);

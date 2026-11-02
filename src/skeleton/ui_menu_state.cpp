@@ -3,6 +3,7 @@
 //
 
 #include "pemu.h"
+#include "launcher.h"
 
 #define STATES_COUNT 4
 
@@ -249,6 +250,8 @@ bool UiMenuState::onInput(c2d::Input::Player *players) {
             if (game.available) {
                 UiState *state = uiStateList->getSelection();
                 if (state->exist) {
+                    // pppEmu: games of other consoles run in their own program (no state loading here)
+                    if (launchInOtherProgram(ui, game)) return true;
                     ui->getConfig()->loadGame(game);
                     ui->getUiEmu()->load(game);
                     state->loadState();

@@ -10,7 +10,7 @@
 #include "pemu.h"
 #include "text_input.h"
 
-// Steps are also written to "<data path>/pppsnes.log" and flushed to disk at once,
+// Steps are also written to "<data path>/pppemu.log" and flushed to disk at once,
 // so if the console kills the app the file shows the last step that ran.
 [[maybe_unused]] static void logStep(UiMain *ui, const char *fmt, ...) {
     char msg[512];
@@ -19,7 +19,7 @@
     vsnprintf(msg, sizeof(msg), fmt, args);
     va_end(args);
     printf("TextInput: %s\n", msg);
-    const std::string path = ui->getIo()->getDataPath() + "pppsnes.log";
+    const std::string path = ui->getIo()->getDataPath() + "pppemu.log";
     if (FILE *f = fopen(path.c_str(), "a")) {
         fprintf(f, "TextInput: %s\n", msg);
         fflush(f);
@@ -119,7 +119,7 @@ bool TextInput::get(UiMain *ui, const std::string &title, const std::string &ini
     }
     if (!ready) {
         ui->getUiMessageBox()->show("KEYBOARD", "THE PS4 KEYBOARD IS NOT AVAILABLE. "
-                                                "SET THE NETWORK OPTIONS IN /data/pppsnes/config.cfg INSTEAD.", "OK");
+                                                "SET THE NETWORK OPTIONS IN /data/pppemu/config.cfg INSTEAD.", "OK");
         return false;
     }
 

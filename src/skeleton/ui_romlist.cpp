@@ -3,6 +3,8 @@
 //
 #include <algorithm>
 #include "pemu.h"
+#include "launcher.h"
+#include "pemu_log.h"
 #include "ss_api.h"
 
 using namespace c2d;
@@ -92,8 +94,9 @@ std::string UIRomList::getPreview(const Game &game, UIRomList::PreviewType type)
     std::string mediaExt = type == Tex ? ".png" : ".mp4";
 
     // downloaded artwork (<data>/media/boxart, title or snap), as chosen in the ARTWORK menu
-    if (type == Tex && pRomList->artwork) {
-        const std::string art = pRomList->artwork->findImage(game, getArtworkType());
+    Artwork *artwork = type == Tex ? pRomList->getArtwork(game) : nullptr;
+    if (artwork) {
+        const std::string art = artwork->findImage(game, getArtworkType());
         if (!art.empty()) return art;
     }
 
@@ -263,6 +266,8 @@ bool UIRomList::onInput(c2d::Input::Player *players) {
             pRomInfo->mpvTexture->setVisibility(c2d::Visibility::Hidden);
             pRomInfo->mpv->stop();
 #endif
+            // pppEmu: games of other consoles run in their own program
+            if (launchInOtherProgram(pMain, game)) return true;
             pMain->getConfig()->loadGame(game);
             pMain->getUiEmu()->load(game);
             return true;
@@ -335,7 +340,7 @@ void UIRomList::onUpdate() {
 
             // missing images (main box and bottom box): download them in background
             // (shown as soon as they're there)
-            auto artwork = pRomList->artwork;
+            auto artwork = pRomList->getArtwork(game);
             if (artwork && isArtworkAutoDownload() && !game.path.empty()) {
                 std::vector<Artwork::Type> types;
                 if (getPreview(game, PreviewType::Tex).empty() && !artwork->isMissing(game, getArtworkType())) {
@@ -356,34 +361,25 @@ void UIRomList::onUpdate() {
         }
     }
 
-    if (pRomList->artwork) {
-        auto artwork = pRomList->artwork;
-
+    bool dbReady = false;
+    for (auto artwork: pRomList->artworks) {
         // first time (or old): get the game information database in background
-        if (!mArtworkDbChecked) {
-            mArtworkDbChecked = true;
-            if (isArtworkAutoDownload() && artwork->needsDatabase()) {
-                artwork->requestDatabase();
-            }
+        if (!mArtworkDbChecked && isArtworkAutoDownload() && artwork->needsDatabase()) {
+            artwork->requestDatabase();
         }
 
-        // game information downloaded: add it to the games, keep the selected game
+        // game information downloaded: add it to the games
         if (artwork->takeDatabaseReady() && artwork->loadDatabase()) {
             const int updated = artwork->applyDatabase(pRomList->gameList);
-            pRomList->updateFilterOptions();
-            const int index = pListBox ? pListBox->getIndex() : 0;
-            updateRomList();
-            if (pListBox && index > 0 && index < (int) mGameList.games.size()) {
-                pListBox->setSelection(index);
-            }
             if (updated > 0) {
                 pMain->getUiStatusBox()->show("GAME INFORMATION ADDED TO %i GAMES", updated);
             }
+            dbReady = true;
         }
 
         // an image finished downloading in background: show it if its game is still selected
         const std::string name = artwork->takeDownloaded();
-        if (!name.empty() && Artwork::gameName(pListBox->getSelection()) == name) {
+        if (!name.empty() && pListBox && Artwork::gameName(pListBox->getSelection()) == name) {
             pRomInfo->load(pListBox->getSelection());
         }
 
@@ -393,6 +389,17 @@ void UIRomList::onUpdate() {
             pMain->getUiStatusBox()->show(notice);
         }
     }
+    mArtworkDbChecked = true;
+
+    // new game information: refresh the list, keep the selected game
+    if (dbReady) {
+        pRomList->updateFilterOptions();
+        const int index = pListBox ? pListBox->getIndex() : 0;
+        updateRomList();
+        if (pListBox && index > 0 && index < (int) mGameList.games.size()) {
+            pListBox->setSelection(index);
+        }
+    }
 
     RectangleShape::onUpdate();
 }
@@ -400,6 +407,22 @@ void UIRomList::onUpdate() {
 Artwork::Type UIRomList::getArtworkType() {
     auto opt = pMain->getConfig()->get(PEMUConfig::OptId::ART_IMAGE_TYPE);
     return opt ? (Artwork::Type) opt->getArrayIndex() : Artwork::Type::Boxart;
+}
+
+bool UIRomList::selectGame(const std::string &fullPath) {
+    if (!pListBox) return false;
+    for (size_t i = 0; i < mGameList.games.size(); i++) {
+        const Game &g = mGameList.games[i];
+        if (g.romsPath + g.path == fullPath) {
+            pListBox->setSelection((int) i);
+            pRomInfo->load();
+            mTimerLoadInfoDone = 0;
+            mTimerLoadInfo.restart();
+            return true;
+        }
+    }
+    logLine("UIRomList::selectGame: %s not in the list", fullPath.c_str());
+    return false;
 }
 
 Artwork::Type UIRomList::getSecondArtworkType() {

@@ -45,7 +45,11 @@ namespace pemu {
         typedef std::function<bool(int, int, const std::string &)> ProgressCb;
 
         // "system": libretro system name ("Nintendo - Super Nintendo Entertainment System")
-        Artwork(c2d::Io *io, const std::string &system);
+        // "systemId": screenscraper id of its games (game.system.id), "mediaPath": folder of the
+        // downloaded files ("<data>/media/")
+        Artwork(c2d::Io *io, const std::string &system, int systemId, const std::string &mediaPath);
+
+        int getSystemId() const { return m_systemId; }
 
         ~Artwork();
 
@@ -73,7 +77,8 @@ namespace pemu {
         // load the downloaded database, returns false if it was never downloaded
         bool loadDatabase();
 
-        // fill unknown developer, publisher, genre, date and players of the list's games.
+        // fill unknown developer, publisher, genre, date and players of the list's games
+        // (only the games of this console).
         // Returns the number of games updated.
         int applyDatabase(ss_api::GameList *list);
 
@@ -119,6 +124,8 @@ namespace pemu {
 
         c2d::Io *m_io;
         std::string m_system;
+        int m_systemId = 0;
+        std::string m_mediaPath;
         std::string m_caFile;
         std::unordered_map<std::string, Info> m_db;
 

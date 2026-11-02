@@ -9,7 +9,7 @@
 
 // local roms: sub folder levels scanned below a console folder
 #define LOCAL_MAX_FOLDER_DEPTH 6
-// local roms: how deep a console folder is looked for ("usb0/pppsnes/roms/SNES" = 3)
+// local roms: how deep a console folder is looked for ("usb0/pppemu/roms/SNES" = 3)
 #define LOCAL_MAX_CONTAINER_DEPTH 3
 
 namespace pemu {
@@ -43,8 +43,14 @@ namespace pemu {
         // local directory where roms from smb:// paths are cached
         std::string getSmbCachePath();
 
-        // artwork and game information downloader (null if the core has no libretro system)
+        // artwork and game information downloaders, one per console with a libretro name
+        std::vector<Artwork *> artworks;
+
+        // the first one (this program's console), null if none
         Artwork *artwork = nullptr;
+
+        // downloader of a game's console, null if none
+        Artwork *getArtwork(const ss_api::Game &game);
 
         // sort the filter lists (genres, developers...) and update the filter menu options
         void updateFilterOptions();
@@ -60,21 +66,24 @@ namespace pemu {
         // add games found in "path": "roms" are file names relative to "path" (sub folders allowed),
         // "gameListXml" an optional local gamelist.xml with names, genres...
         void addGames(const std::string &path, const ss_api::System &system,
-                      std::vector<std::string> roms, const std::string &gameListXml);
+                      std::vector<std::string> roms, const std::string &gameListXml,
+                      const std::vector<std::string> &exts);
 
         // add games of a local folder, "maxDepth" levels of sub folders included
-        void appendLocal(const std::string &dir, const ss_api::System &system, int maxDepth);
+        void appendLocal(const std::string &dir, const ss_api::System &system, int maxDepth,
+                         const std::vector<std::string> &exts);
 
         // add games of a local roms root (internal drive, usb): only this console's folder(s),
         // found by name. "allowLooseFiles": also use the files directly in "root".
-        void appendLocalRoot(const std::string &root, const ss_api::System &system, bool allowLooseFiles);
+        void appendLocalRoot(const std::string &root, const PEMUConfig::CoreSystem &sys, bool allowLooseFiles);
 
         std::vector<std::string> m_scanned;
 
 #ifdef __SMB__
         // add games from an smb:// rom path (remote listing + optional remote gamelist.xml)
         // "maxDepth": how many levels of sub folders are scanned
-        void appendSmb(const std::string &path, const ss_api::System &system, int maxDepth);
+        void appendSmb(const std::string &path, const ss_api::System &system, int maxDepth,
+                       const std::vector<std::string> &exts);
 #endif
 
         std::vector<std::string> filters;

@@ -1,6 +1,6 @@
-# pppSnes skin: dark semi-transparent boxes over a background picture.
+# pppEmu skin: dark semi-transparent boxes over a background picture.
 # Background: put a 1280x720 "background.jpg" (or edit "texture" below) in
-# /data/pppsnes/skins/default/ on the ps4. Without it, the background is black.
+# /data/pppemu/skins/default/ on the ps4. Without it, the background is black.
 # Colors are [ red, green, blue, alpha ], alpha 0 = invisible .. 255 = opaque.
 SKIN_CONFIG :
 {

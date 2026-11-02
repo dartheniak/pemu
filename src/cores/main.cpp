@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "skeleton/pemu_log.h"
+#include "skeleton/launcher.h"
 
 using namespace c2d;
 using namespace pemu;
@@ -43,17 +44,32 @@ int main(int argc, char **argv) {
     const auto skin = new PEMUSkin(pemu_ui);
     pemu_ui->setSkin(skin);
 
-    // parse command line
-    if (argc > 1) {
-        if (io->exist(argv[1])) {
-            game.path = Utility::baseName(argv[1]);
+    // parse command line ("program <rom>", or pppEmu's options, see skeleton/launcher.h)
+    const LaunchArgs launchArgs = parseLaunchArgs(argc, argv);
+    if (launchArgs.pppemu) {
+        // started by the launcher, or coming back to it: keep the log of the previous program
+        logKeepPrevious();
+        logInit(io->getDataPath());
+        logLine("main: started with%s%s%s%s%s%s",
+                launchArgs.rom.empty() ? "" : " rom ", launchArgs.rom.c_str(),
+                launchArgs.select.empty() ? "" : " select ", launchArgs.select.c_str(),
+                launchArgs.returnTo.empty() ? "" : " return ", launchArgs.returnTo.c_str());
+        logKeepPrevious();
+    }
+    if (!launchArgs.rom.empty()) {
+        const std::string rom = launchArgs.rom;
+        if (io->exist(rom)) {
+            game.path = Utility::baseName(rom);
             game.name = Utility::removeExt(game.path);
-            game.romsPath = Utility::remove(argv[1], game.path);
+            game.romsPath = Utility::remove(rom, game.path);
         } else {
-            printf("main: file provided as console argument does not exist (%s)\n", argv[1]);
+            printf("main: file provided as console argument does not exist (%s)\n", rom.c_str());
+            logLine("main: rom not found: %s", rom.c_str());
             delete (skin);
             delete (cfg);
             delete (pemu_ui);
+            // started by the launcher: go back to it
+            returnToLauncher(launchArgs);
             return 1;
         }
     }
@@ -91,6 +107,11 @@ int main(int argc, char **argv) {
         pemu_ui->getUiMessageBox()->show("WARNING", message, "OK");
     }
 
+    // pppEmu: back from a game run by another program, select it again
+    if (game.path.empty() && !launchArgs.select.empty()) {
+        uiRomList->selectGame(launchArgs.select);
+    }
+
     pemu::logLine("main: ui ready");
     while (!pemu_ui->done) {
         pemu_ui->flip();
@@ -99,6 +120,11 @@ int main(int argc, char **argv) {
     delete (skin);
     delete (cfg);
     delete (pemu_ui);
+
+    // pppEmu: a game of another console was chosen, start its program (never returns on success)
+    runPendingLaunch();
+    // pppEmu: game closed in a program started by the launcher, go back to it
+    returnToLauncher(launchArgs);
 
 #ifdef  __PS4__
     sceSystemServiceLoadExec((char *) "exit", nullptr);

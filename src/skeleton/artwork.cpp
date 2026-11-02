@@ -16,7 +16,7 @@
 
 using namespace pemu;
 
-#define ARTWORK_USER_AGENT "pppSnes (pEMU fork)"
+#define ARTWORK_USER_AGENT "pppEmu (pEMU fork)"
 #define ARTWORK_CONNECT_TIMEOUT 8
 #define ARTWORK_TIMEOUT 60
 #define ARTWORK_MAX_REDIRECTS 5
@@ -70,9 +70,11 @@ static std::string lowerCase(std::string s) {
     return s;
 }
 
-Artwork::Artwork(c2d::Io *io, const std::string &system) {
+Artwork::Artwork(c2d::Io *io, const std::string &system, int systemId, const std::string &mediaPath) {
     m_io = io;
     m_system = system;
+    m_systemId = systemId;
+    m_mediaPath = mediaPath;
 
     // certificates for https downloads, shipped with the app (the ps4 has no usable ca store)
     const std::string ca = io->getRomFsPath() + "cacert.pem";
@@ -111,7 +113,7 @@ Artwork::~Artwork() {
 }
 
 std::string Artwork::mediaPath() {
-    return m_io->getDataPath() + "media/";
+    return m_mediaPath;
 }
 
 std::string Artwork::gameName(const ss_api::Game &game) {
@@ -374,6 +376,7 @@ int Artwork::applyDatabase(ss_api::GameList *list) {
 
     int updated = 0;
     for (auto &game: list->games) {
+        if (game.system.id != m_systemId) continue;
         auto it = m_db.find(lowerCase(gameName(game)));
         if (it == m_db.end()) continue;
         const Info &info = it->second;
