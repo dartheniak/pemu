@@ -46,7 +46,7 @@ public:
         };
     }
 
-#if defined(PPPEMU_GENESIS_PROGRAM) || defined(PPPEMU_NES_PROGRAM)
+#if defined(PPPEMU_GENESIS_PROGRAM) || defined(PPPEMU_NES_PROGRAM) || defined(PPPEMU_GBA_PROGRAM)
     // pppEmu: the system filter (L2 / R2 in the list) switches between consoles
     std::vector<int> getCoreHiddenOptionToEnable() override {
         return {UI_FILTER_SYSTEM};
@@ -76,6 +76,40 @@ public:
                 {".zip", ".nes", ".unf", ".unif"},
                 "Nintendo - Nintendo Entertainment System",
                 PPPEMU_NES_PROGRAM
+        });
+#endif
+#ifdef PPPEMU_GBA_PROGRAM
+        // game boy consoles: all run by the game boy program (mGBA). The gba bios is optional
+        // (/data/pppemu/pgba/bios/gba_bios.bin), mGBA has its own replacement.
+        systems.push_back({
+                {9, 0, "Game Boy"},
+                {
+                        "Nintendo - Game Boy",                      // No-Intro
+                        "Nintendo Game Boy", "Game Boy", "GameBoy", "GB",
+                },
+                {".zip", ".gb"},
+                "Nintendo - Game Boy",
+                PPPEMU_GBA_PROGRAM
+        });
+        systems.push_back({
+                {10, 0, "Game Boy Color"},
+                {
+                        "Nintendo - Game Boy Color",                // No-Intro
+                        "Nintendo Game Boy Color", "Game Boy Color", "GameBoy Color", "GBC",
+                },
+                {".zip", ".gbc", ".gb"},
+                "Nintendo - Game Boy Color",
+                PPPEMU_GBA_PROGRAM
+        });
+        systems.push_back({
+                {12, 0, "Game Boy Advance"},
+                {
+                        "Nintendo - Game Boy Advance",              // No-Intro
+                        "Nintendo Game Boy Advance", "Game Boy Advance", "GameBoy Advance", "GBA",
+                },
+                {".zip", ".gba"},
+                "Nintendo - Game Boy Advance",
+                PPPEMU_GBA_PROGRAM
         });
 #endif
 #ifdef PPPEMU_GENESIS_PROGRAM

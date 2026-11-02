@@ -158,7 +158,8 @@ add_dependencies(${PROJECT_NAME}.data.skin ${PROJECT_NAME}.data)
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}.data.skin)
 
 #####################
-# pppEmu: other consoles' games run in other pEMU programs (pgen: sega consoles, pnes: nes),
+# pppEmu: other consoles' games run in other pEMU programs (pgen: sega consoles, pnes: nes,
+# pgba: game boy, game boy color, game boy advance),
 # shipped in the same package and started with the game (see src/skeleton/launcher.h)
 #####################
 set(PPPEMU_AUTH_INFO "000000000000000000000000001C004000FF000000000080000000000000000000000000000000000000008000400040000000000000008000000000000000080040FFFF000000F000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
@@ -189,3 +190,4 @@ function(pppemu_add_program core define)
 endfunction()
 pppemu_add_program(pgen PPPEMU_GENESIS_PROGRAM)
 pppemu_add_program(pnes PPPEMU_NES_PROGRAM)
+pppemu_add_program(pgba PPPEMU_GBA_PROGRAM)

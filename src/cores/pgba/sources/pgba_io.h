@@ -25,8 +25,10 @@ namespace c2d {
             return "ux0:/data/pgba/";
         }
 #elif __PS4__
+        // pppEmu: the game boy program ships inside the pppEmu package, its saves and
+        // settings live in a sub folder of pppEmu's data folder
         std::string getDataPath() override {
-            return "/data/pgba/";
+            return "/data/pppemu/pgba/";
         }
 #ifndef NDEBUG
         std::string getRomFsPath() override {

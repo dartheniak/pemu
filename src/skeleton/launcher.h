@@ -36,6 +36,8 @@ namespace pemu {
         std::string select;
         // settings shared by all the programs (display, controls), see writeSharedSettings
         std::string settings;
+        // console page (system filter, L2 / R2) to show again in the launcher's list
+        std::string system;
         // true if started by the launcher or returning to it
         bool pppemu = false;
     };

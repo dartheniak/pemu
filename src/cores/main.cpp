@@ -116,6 +116,15 @@ int main(int argc, char **argv) {
 
     // pppEmu: back from a game run by another program, select it again
     if (game.path.empty() && !launchArgs.select.empty()) {
+        // same console page as before (L2 / R2)
+        if (!launchArgs.system.empty()) {
+            auto sysOpt = cfg->get(PEMUConfig::OptId::UI_FILTER_SYSTEM);
+            const auto pages = sysOpt->getArray();
+            if (std::find(pages.begin(), pages.end(), launchArgs.system) != pages.end()) {
+                sysOpt->setArrayIndex(launchArgs.system);
+                uiRomList->updateRomList();
+            }
+        }
         uiRomList->selectGame(launchArgs.select);
     }
 

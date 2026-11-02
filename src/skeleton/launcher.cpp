@@ -26,6 +26,7 @@ using namespace pemu;
 #define ARG_RETURN "--pppemu-return="
 #define ARG_SELECT "--pppemu-select="
 #define ARG_SETTINGS "--pppemu-settings="
+#define ARG_SYSTEM "--pppemu-system="
 #define SHARED_SETTINGS_FILE "shared_settings.cfg"
 // desktop builds only: data folder of the program to go back to (its working directory)
 #define ARG_CWD "--pppemu-cwd="
@@ -59,6 +60,8 @@ LaunchArgs pemu::parseLaunchArgs(int argc, char **argv) {
         } else if (startsWith(argv[i], ARG_SELECT)) {
             args.select = argv[i] + strlen(ARG_SELECT);
             args.pppemu = true;
+        } else if (startsWith(argv[i], ARG_SYSTEM)) {
+            args.system = argv[i] + strlen(ARG_SYSTEM);
         } else if (startsWith(argv[i], ARG_SETTINGS)) {
             args.settings = argv[i] + strlen(ARG_SETTINGS);
         } else if (startsWith(argv[i], ARG_CWD)) {
@@ -228,6 +231,7 @@ bool pemu::launchInOtherProgram(UiMain *ui, const ss_api::Game &game) {
             ARG_RETURN + selfProgramPath(),
             ARG_SELECT + game.romsPath + game.path,
             ARG_SETTINGS + settings,
+            ARG_SYSTEM + ui->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString(),
     };
 #ifndef __PS4__
     s_pendingArgs.push_back(ARG_CWD + ui->getIo()->getDataPath());
@@ -273,6 +277,7 @@ void pemu::returnToLauncher(const LaunchArgs &args) {
     std::vector<std::string> a;
     if (!args.select.empty()) a.push_back(ARG_SELECT + args.select);
     if (!args.settings.empty()) a.push_back(ARG_SETTINGS + args.settings);
+    if (!args.system.empty()) a.push_back(ARG_SYSTEM + args.system);
     std::string error;
     execProgram(program, a, &error);
 }
