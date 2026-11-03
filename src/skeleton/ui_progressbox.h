@@ -23,7 +23,11 @@ namespace pemu {
 
         c2d::Text *getMessageText();
 
+        // pppEmu: the emulators' "Please wait..." box (game loading) is not shown in demo mode
+        void setVisibility(c2d::Visibility visibility, bool tweenPlay = false) override;
+
     private:
+        bool mGameLoading = false;
 
         c2d::Text *m_title;
         c2d::Text *m_message;

@@ -2,7 +2,9 @@
 // Created by cpasjuste on 03/02/18.
 //
 
+#include <cmath>
 #include "pemu.h"
+#include "border_fx.h"
 
 UiEmu::UiEmu(UiMain *u) : RectangleShape(u->getSize()) {
     printf("UiEmu()\n");
@@ -72,7 +74,7 @@ int UiEmu::load(const Game &game) {
            game.path.c_str(), game.romsPath.c_str());
     if (demo::isActive()) {
         mDemoClock.restart();
-        pMain->getUiStatusBox()->show("DEMO MODE: PRESS ANY BUTTON TO PLAY");
+        createDemoOverlay();
     } else {
         pMain->getUiStatusBox()->show("TIPS: PRESS MENU1 + MENU2 BUTTONS FOR IN GAME MENU...");
     }
@@ -199,8 +201,69 @@ void UiEmu::stopDemo(bool next) {
     // else: started by the launcher, stop() closes this program, main() goes back to it
 }
 
+void UiEmu::createDemoOverlay() {
+    if (mDemoBox) return;
+    static const std::string message = "DEMO MODE  -  PRESS ANY BUTTON TO PLAY";
+    const float s = pMain->getScaling().y;
+    const auto size = (unsigned int) ((float) pMain->getFontSize() * 1.1f);
+    Font *font = pMain->getSkin()->getFont();
+
+    // letter positions from the whole line
+    Text line(message, size, font);
+    line.setOutlineThickness(2 * s);
+    const FloatRect bounds = line.getLocalBounds();
+    const float padX = 20 * s, padY = 10 * s;
+
+    mDemoBox = new RectangleShape({bounds.width + padX * 2, (float) size + padY * 2});
+    mDemoBox->setFillColor({0, 0, 0, 170});
+    mDemoBox->setOutlineColor({247, 59, 146, 255});
+    mDemoBox->setOutlineThickness(2 * s * borderfx::BORDER_SCALE);
+    mDemoBox->setOrigin(Origin::Bottom);
+    mDemoBox->setPosition(pMain->getSize().x / 2, pMain->getSize().y - 28 * s);
+    mDemoCharsY = padY - bounds.top + (float) size * 0.05f;
+    for (size_t i = 0; i < message.size(); i++) {
+        if (message[i] == ' ') continue;
+        auto *t = new Text(std::string(1, message[i]), size, font);
+        t->setOutlineThickness(2 * s);
+        t->setOutlineColor(Color::Black);
+        const float x = padX + line.findCharacterPos(i).x - bounds.left;
+        t->setPosition(x, mDemoCharsY);
+        mDemoBox->add(t);
+        mDemoChars.push_back(t);
+        mDemoCharsX.push_back(x);
+    }
+    add(mDemoBox);
+    mDemoBox->setLayer(10);     // over the game (after add: add() sorts before inserting)
+    mDemoBox->setVisibility(Visibility::Hidden);
+}
+
+void UiEmu::updateDemoOverlay() {
+    if (!mDemoBox) return;
+    const bool show = demo::isActive() && isVisible();
+    if (show != mDemoBox->isVisible()) {
+        mDemoBox->setVisibility(show ? Visibility::Visible : Visibility::Hidden);
+    }
+    if (!show) return;
+
+    if (const auto opt = pMain->getConfig()->get(PEMUConfig::OptId::UI_BORDER_ANIMATION)) {
+        borderfx::setSpeed(opt->getString());
+    }
+    const float time = borderfx::getTime();
+    const float speed = borderfx::getWaveSpeed();
+    const float s = pMain->getScaling().y;
+    for (size_t i = 0; i < mDemoChars.size(); i++) {
+        // rainbow flowing along the letters, and a small wave (still if the animation is OFF)
+        mDemoChars[i]->setFillColor(borderfx::getColor((float) i * 0.04f - time * speed));
+        const float bob = speed > 0 ? std::sin(time * 6.0f - (float) i * 0.45f) * 3 * s : 0;
+        mDemoChars[i]->setPosition(mDemoCharsX[i], mDemoCharsY + bob);
+    }
+    // the box's border: colours like the ui's (the ui's own animation is off during games)
+    borderfx::update(this, pMain->getSize().x, pMain->getSize().y);
+}
+
 void UiEmu::onUpdate() {
     C2DObject::onUpdate();
+    updateDemoOverlay();
 
     // demo mode: time is up, next game
     if (demo::isActive() && isVisible() && !paused

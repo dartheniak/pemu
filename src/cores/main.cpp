@@ -86,6 +86,8 @@ int main(int argc, char **argv) {
     if (game.path.empty()) {
         // pppEmu: back from a game run by another program, same list as before
         romList->useListCache = launchArgs.pppemu && launchArgs.rom.empty() && !launchArgs.select.empty();
+        // demo mode, between two games: no loading screen (the next game starts right away)
+        if (launchArgs.demoNext && romList->rect) romList->rect->setVisibility(Visibility::Hidden);
         romList->build();
         romList->initFav();
     } else {
@@ -136,7 +138,11 @@ int main(int argc, char **argv) {
         }
         uiRomList->selectGame(launchArgs.select);
         // demo mode: the previous game's time is up, next one
-        if (launchArgs.demoNext) uiRomList->startDemoLater();
+        // (the list isn't shown in between)
+        if (launchArgs.demoNext) {
+            uiRomList->setVisibility(Visibility::Hidden);
+            uiRomList->startDemoLater();
+        }
     }
 
     pemu::logLine("main: ui ready, screen %ix%i", (int) pemu_ui->getSize().x, (int) pemu_ui->getSize().y);

@@ -124,21 +124,36 @@ namespace {
 
 void pemu::borderfx::setSpeed(const std::string &speed) {
     s_still = speed == "OFF";
+    // turns per second of the colours around a box (about 3x faster than in 1.05)
     if (speed == "SLOW") {
-        s_wave = 0.05f;
-        s_pulse = 0.5f;
+        s_wave = 0.15f;
+        s_pulse = 0.7f;
     } else if (speed == "FAST") {
-        s_wave = 0.30f;
-        s_pulse = 1.3f;
+        s_wave = 0.90f;
+        s_pulse = 1.6f;
     } else {
-        s_wave = 0.12f;
-        s_pulse = 0.8f;
+        s_wave = 0.40f;
+        s_pulse = 1.1f;
     }
+}
+
+float pemu::borderfx::getTime() {
+    return std::chrono::duration<float>(std::chrono::steady_clock::now() - s_start).count();
+}
+
+float pemu::borderfx::getWaveSpeed() {
+    return s_still ? 0 : s_wave;
+}
+
+c2d::Color pemu::borderfx::getColor(float pos) {
+    float rgb[3];
+    paletteColor(pos, rgb);
+    return {clampByte(rgb[0]), clampByte(rgb[1]), clampByte(rgb[2]), 255};
 }
 
 void pemu::borderfx::update(C2DObject *root, float width, float height) {
     if (!root || width <= 0 || height <= 0) return;
-    const float time = std::chrono::duration<float>(std::chrono::steady_clock::now() - s_start).count();
+    const float time = getTime();
     // the root (the window) has no position of its own to add
     for (auto *child: root->getChilds()) {
         walk(child, 0, 0, width, height, time);

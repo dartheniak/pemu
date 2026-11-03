@@ -4,6 +4,7 @@
 
 #include "pemu.h"
 #include "skin.h"
+#include "border_fx.h"
 
 Skin::Skin(UiMain *u) {
     pMain = u;
@@ -380,7 +381,7 @@ Skin::RectangleShapeGroup Skin::getRectangleShape(const std::vector<std::string>
     option = group->getOption("outline_size");
     if (option) {
         rectangleShapeGroup.outlineSize = option->getFloat();
-        rectangleShapeGroup.outlineSize *= mScaling.y;
+        rectangleShapeGroup.outlineSize *= mScaling.y * pemu::borderfx::BORDER_SCALE;    // pppEmu: thicker
         if (rectangleShapeGroup.outlineSize > 0 && rectangleShapeGroup.outlineSize < 1) {
             rectangleShapeGroup.outlineSize = 1;
         }

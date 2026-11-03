@@ -60,6 +60,16 @@ void UIProgressBox::setProgress(float progress) {
 
 void UIProgressBox::setMessage(const std::string &message) {
     m_message->setString(message);
+    mGameLoading = message == "Please wait...";
+}
+
+void UIProgressBox::setVisibility(c2d::Visibility visibility, bool tweenPlay) {
+    // demo mode: one game after the other without a loading box in between (downloads still
+    // show theirs)
+    if (visibility == Visibility::Visible && mGameLoading && demo::isActive()) {
+        visibility = Visibility::Hidden;
+    }
+    SkinnedRectangle::setVisibility(visibility, tweenPlay);
 }
 
 c2d::Text *UIProgressBox::getTitleText() {

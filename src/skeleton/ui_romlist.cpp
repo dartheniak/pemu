@@ -380,6 +380,20 @@ bool UIRomList::onInput(c2d::Input::Player *players) {
 }
 
 void UIRomList::onUpdate() {
+    // demo mode, back from another program: the next game right away (the list stays hidden)
+    if (mDemoPending) {
+        if (pMain->getUiMessageBox()->isVisible()) {
+            // a warning to read (network...): demo stopped, list shown
+            mDemoPending = false;
+            demo::end();
+            setVisibility(Visibility::Visible);
+        } else if (!pMain->getUiProgressBox()->isVisible()) {
+            mDemoPending = false;
+            startDemo();
+            return;
+        }
+    }
+
     if (!isVisible() || pMain->getUiProgressBox()->isVisible()) {
         return;
     }
@@ -388,10 +402,6 @@ void UIRomList::onUpdate() {
     if (pMain->getUiMenu()->isVisible() || pMain->getUiStateMenu()->isVisible()
         || pMain->getUiMessageBox()->isVisible()) {
         mIdleClock.restart();
-    } else if (mDemoPending) {
-        mDemoPending = false;
-        startDemo();
-        return;
     } else {
         const int idle = demo::parseDuration(pMain->getConfig()->get(PEMUConfig::OptId::DEMO_START_AFTER)->getString());
         if (idle > 0 && mIdleClock.getElapsedTime().asSeconds() > (float) idle) {
@@ -522,6 +532,7 @@ void UIRomList::startDemo() {
     }
     if (games.empty()) {
         demo::end();
+        setVisibility(Visibility::Visible);
         pMain->getUiStatusBox()->show("DEMO MODE: NO GAMES TO SHOW");
         return;
     }
@@ -549,7 +560,10 @@ void UIRomList::startDemo() {
 
     if (launchInOtherProgram(pMain, game)) {
         // run by another program: this one closes (or an error was shown)
-        if (!pMain->done) demo::end();
+        if (!pMain->done) {
+            demo::end();
+            setVisibility(Visibility::Visible);
+        }
         return;
     }
 #ifdef __MPV__

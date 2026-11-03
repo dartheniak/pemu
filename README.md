@@ -31,8 +31,10 @@ another console is started, pppEmu hands over to that console's program
   stored on the PS4. The bottom box shows an in-game screenshot.
 - **Arcade**: FBNeo romsets shown with their full names, bios files hidden, parent and bios
   zips downloaded with network games.
-- **Demo mode**: random games one after the other, after an idle time or with L3 + R3. Any
-  button goes back to the list on that game. Saves are never written during a demo.
+- **Demo mode**: random games one after the other (2 minutes each by default), after an idle
+  time or with L3 + R3, with a rainbow "DEMO MODE" banner. The next game starts straight
+  away, without the list or a loading box in between. Any button goes back to the list on
+  that game. Saves are never written during a demo.
 - **Shared settings**: display (scaling, filter, effect) and controller settings are the
   same in all the emulators. A game only keeps the settings changed for that game.
 - **Skin**: dark semi-transparent boxes over a background picture, one picture per console

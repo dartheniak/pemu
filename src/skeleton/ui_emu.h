@@ -66,6 +66,17 @@ namespace pemu {
 
         // demo mode: end it (button pressed) or go to the next game (time is up)
         void stopDemo(bool next);
+
+        // demo mode: "DEMO MODE - PRESS ANY BUTTON TO PLAY" at the bottom, all the time, in
+        // the kiwi logo colours (letters flowing and waving, border like the ui's)
+        c2d::RectangleShape *mDemoBox = nullptr;
+        std::vector<c2d::Text *> mDemoChars;
+        std::vector<float> mDemoCharsX;
+        float mDemoCharsY = 0;
+
+        void createDemoOverlay();
+
+        void updateDemoOverlay();
     };
 }
 

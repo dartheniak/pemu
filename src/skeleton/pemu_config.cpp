@@ -120,7 +120,8 @@ PEMUConfig::PEMUConfig(Renderer *renderer, const std::string &name, int version)
     Group demo("DEMO_MODE", DEMO);
     demo.addOption({"START_AFTER", {"OFF", "1 MIN", "2 MIN", "5 MIN", "10 MIN"}, 3, DEMO_START_AFTER,
                     "IDLE TIME IN THE LIST BEFORE THE DEMO STARTS (L3 + R3: START IT NOW)"});
-    demo.addOption({"TIME_PER_GAME", {"30 SEC", "1 MIN", "2 MIN", "5 MIN"}, 1, DEMO_TIME,
+    // pppEmu 1.06: was TIME_PER_GAME (1 MIN): new name, so the new default (2 MIN) is used
+    demo.addOption({"GAME_TIME", {"30 SEC", "1 MIN", "2 MIN", "5 MIN", "10 MIN"}, 2, DEMO_TIME,
                     "HOW LONG EACH GAME IS SHOWN"});
     demo.addOption({"GAMES", {"ALL", "CURRENT PAGE", "FAVORITES"}, 0, DEMO_GAMES,
                     "GAMES SHOWN: ALL, THE CONSOLE PAGE (L2 / R2) OR THE FAVORITES"});

@@ -143,7 +143,7 @@ Random games are shown one after the other. Settings in the main menu (R1), DEMO
 
 - START_AFTER: idle time in the list before it starts (OFF, 1, 2, 5, 10 min). L3 + R3 (both
   sticks pressed) starts it at once.
-- TIME_PER_GAME: 30 sec, 1, 2, 5 min.
+- GAME_TIME: 30 sec, 1, 2 (default), 5, 10 min.
 - GAMES: ALL, CURRENT PAGE (the L2 / R2 console page), FAVORITES, SUPER NINTENDO ONLY (no
   switching between programs).
 - SOUND: ON / OFF.

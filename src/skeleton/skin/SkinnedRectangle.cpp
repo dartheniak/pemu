@@ -3,6 +3,7 @@
 //
 
 #include "skeleton/pemu.h"
+#include "skeleton/border_fx.h"
 
 SkinnedRectangle::SkinnedRectangle(UiMain *main, const std::vector<std::string> &cfgTree)
         : RectangleShape({0, 0}) {
@@ -70,7 +71,7 @@ bool SkinnedRectangle::load() {
     setOutlineColor(pSkin->getOutlineColor(group));
 
     // load shape outline thickness
-    setOutlineThickness(pSkin->getOutlineThickness(group));
+    setOutlineThickness(pSkin->getOutlineThickness(group) * pemu::borderfx::BORDER_SCALE);    // pppEmu: thicker
 
     // load shape origin
     setOrigin(pSkin->getOrigin(group));

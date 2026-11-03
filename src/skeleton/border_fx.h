@@ -13,6 +13,7 @@
 #define PEMU_BORDER_FX_H
 
 #include <string>
+#include "cross2d/skeleton/sfml/Color.hpp"
 
 namespace c2d {
     class C2DObject;
@@ -20,11 +21,22 @@ namespace c2d {
 
 namespace pemu {
     namespace borderfx {
+        // box borders are drawn this many times thicker than the skin says
+        static const float BORDER_SCALE = 2.0f;
+
         // name given to the selection rectangles (they pulse)
         static const char *const SELECTED_NAME = "pppemu_selected";
 
         // "OFF", "SLOW", "NORMAL", "FAST"
         void setSpeed(const std::string &speed);
+
+        // seconds since start, colours turns per second (0 if OFF)
+        float getTime();
+
+        float getWaveSpeed();
+
+        // kiwi logo colour at "pos" in the colour loop (0..1, repeats)
+        c2d::Color getColor(float pos);
 
         // colours of the visible borders under "root" (called once per frame, before drawing)
         void update(c2d::C2DObject *root, float width, float height);
