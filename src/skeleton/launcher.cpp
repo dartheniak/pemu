@@ -362,6 +362,7 @@ static bool isSharedOption(const std::string &group, const std::string &name) {
         return name == "SCALING" || name == "SCALING_MODE" || name == "FILTER" ||
                name == "EFFECT" || name == "SHOW_FPS";
     }
+    if (group == "UI_OPTIONS") return name == "BORDER_ANIMATION";
     return group == "GAMEPAD" || group == "KEYBOARD";
 }
 

@@ -36,7 +36,8 @@ another console is started, pppEmu hands over to that console's program
 - **Shared settings**: display (scaling, filter, effect) and controller settings are the
   same in all the emulators. A game only keeps the settings changed for that game.
 - **Skin**: dark semi-transparent boxes over a background picture, one picture per console
-  page if wanted.
+  page if wanted. Borders in the kiwi logo's colours flowing around the boxes, the selection
+  pulsing (MAIN MENU > UI_OPTIONS > BORDER_ANIMATION: OFF, SLOW, NORMAL, FAST).
 - **Save states** for all consoles, also from the list (L1 on a game, STATES).
 - **The share password** is stored encrypted in `config.cfg`.
 

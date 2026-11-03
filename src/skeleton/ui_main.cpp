@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include "pemu.h"
+#include "border_fx.h"
 #include "ui_main.h"
 
 UiMain::UiMain(const Vector2f &size) : C2DRenderer(size) {
@@ -76,6 +77,14 @@ void UiMain::onUpdate() {
                 mTimer.restart();
             }
         }
+    }
+
+    // pppEmu: animated borders (not while a game is running)
+    if (pConfig && (!pEmu || !pEmu->isVisible() || pEmu->isPaused())) {
+        if (const auto opt = pConfig->get(PEMUConfig::OptId::UI_BORDER_ANIMATION)) {
+            borderfx::setSpeed(opt->getString());
+        }
+        borderfx::update(this, getSize().x, getSize().y);
     }
 
     C2DRenderer::onUpdate();

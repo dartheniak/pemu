@@ -3,6 +3,7 @@
 //
 
 #include "pemu.h"
+#include "border_fx.h"
 
 using namespace c2d;
 using namespace pemu;
@@ -121,6 +122,7 @@ void UIListBox::init(Font *font, int fontSize) {
 
     // add selection rectangle (highlight)
     highlight = new RectangleShape(Vector2f(getSize().x - 2, line_height));
+    highlight->setName(pemu::borderfx::SELECTED_NAME);    // pppEmu: pulses
     add(highlight);
 
     // add lines of text

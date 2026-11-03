@@ -3,6 +3,7 @@
 //
 
 #include "pemu.h"
+#include "border_fx.h"
 #include "ui_menu.h"
 #include "text_input.h"
 
@@ -135,6 +136,7 @@ UiMenu::UiMenu(UiMain *uiMain) : SkinnedRectangle(uiMain, {"OPTIONS_MENU"}) {
 
     // add selection rectangle (highlight)
     highlight = new RectangleShape({16, 16});
+    highlight->setName(pemu::borderfx::SELECTED_NAME);    // pppEmu: pulses
     ui->getSkin()->loadRectangleShape(highlight, {"SKIN_CONFIG", "HIGHLIGHT"});
     highlight->setSize(UiMenu::getSize().x - 2, lineHeight - (highlight->getOutlineThickness() * 2));
     highlight->move(1, 0);
