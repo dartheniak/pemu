@@ -63,6 +63,13 @@ SKIN_CONFIG :
     texture = "background.jpg";
     texture_filtering = 1;
     texture_color = [ 255, 255, 255, 255 ];
+    // pppEmu logo (pppemu_logo.png, 600x621): top left of the game list, in the middle of its
+    // 516x196 space, and big while the game list loads. Same shape as the picture.
+    TITLE :
+    {
+      texture = "pppemu_logo.png";
+      rectangle = [ 169.0, 6.0, 190.0, 196.0 ];
+    };
     ROM_LIST :
     {
       TEXT :
