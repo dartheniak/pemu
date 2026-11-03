@@ -2,8 +2,11 @@
 # Background: put a 1920x1080 "background.jpg" (or edit "texture" below) in
 # /data/pppemu/skins/default/ on the ps4. Without it, the background is black.
 # One background per console (shown when that console is selected with L2 / R2):
-# background_super_nintendo.jpg, background_mega_drive.jpg, background_master_system.jpg,
-# background_game_gear.jpg (.png also works). Borders: [ 0, 180, 80 ] green.
+# background_master_system.jpg, background_game_gear.jpg, background_mega_drive.jpg,
+# background_sega_cd.jpg, background_nes.jpg, background_game_boy.jpg,
+# background_game_boy_color.jpg, background_game_boy_advance.jpg,
+# background_super_nintendo.jpg, background_arcade.jpg (.png also works; a console
+# without its own picture shows background.jpg). Borders: [ 0, 180, 80 ] green.
 # Colors are [ red, green, blue, alpha ], alpha 0 = invisible .. 255 = opaque.
 SKIN_CONFIG :
 {
