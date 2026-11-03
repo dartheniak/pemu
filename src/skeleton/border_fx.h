@@ -22,7 +22,7 @@ namespace c2d {
 namespace pemu {
     namespace borderfx {
         // box borders are drawn this many times thicker than the skin says
-        static const float BORDER_SCALE = 2.0f;
+        static const float BORDER_SCALE = 1.0f;
 
         // name given to the selection rectangles (they pulse)
         static const char *const SELECTED_NAME = "pppemu_selected";

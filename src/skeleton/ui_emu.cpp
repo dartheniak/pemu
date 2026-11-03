@@ -235,6 +235,28 @@ void UiEmu::createDemoOverlay() {
     add(mDemoBox);
     mDemoBox->setLayer(10);     // over the game (after add: add() sorts before inserting)
     mDemoBox->setVisibility(Visibility::Hidden);
+
+    // the logo, as in the game list (skin: MAIN > TITLE), at the bottom right
+    const auto logo = pMain->getSkin()->getRectangleShape({"MAIN", "TITLE"});
+    if (!logo.texture.empty() && logo.rect.width > 0 && logo.rect.height > 0) {
+        for (const auto &dir: pMain->getSkin()->getPaths()) {
+            if (!pMain->getIo()->exist(dir + logo.texture)) continue;
+            auto *tex = new C2DTexture(dir + logo.texture);
+            if (!tex->available || tex->getSize().x <= 0 || tex->getSize().y <= 0) {
+                delete (tex);
+                break;
+            }
+            tex->setFilter(Texture::Filter::Linear);
+            tex->setScale(logo.rect.width / tex->getSize().x, logo.rect.height / tex->getSize().y);
+            tex->setOrigin(Origin::BottomRight);
+            tex->setPosition(pMain->getSize().x - logo.rect.left, pMain->getSize().y - logo.rect.top);
+            add(tex);
+            tex->setLayer(10);
+            tex->setVisibility(Visibility::Hidden);
+            mDemoLogo = tex;
+            break;
+        }
+    }
 }
 
 void UiEmu::updateDemoOverlay() {
@@ -242,6 +264,7 @@ void UiEmu::updateDemoOverlay() {
     const bool show = demo::isActive() && isVisible();
     if (show != mDemoBox->isVisible()) {
         mDemoBox->setVisibility(show ? Visibility::Visible : Visibility::Hidden);
+        if (mDemoLogo) mDemoLogo->setVisibility(show ? Visibility::Visible : Visibility::Hidden);
     }
     if (!show) return;
 

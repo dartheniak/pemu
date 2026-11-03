@@ -36,8 +36,12 @@ UIRomList::UIRomList(UiMain *main, RomList *romList, const c2d::Vector2f &size)
     pTitleText = new SkinnedText(pMain, {"SKIN_CONFIG", "MAIN", "ROM_LIST", "SYSTEM_TEXT"});
     if (pTitleText->available) {
         UIRomList::add(pTitleText);
+        // pppEmu: a long title is made smaller to fit, not cut
+        mTitleMaxWidth = skin->getText({"MAIN", "ROM_LIST", "SYSTEM_TEXT"}).rect.width;
+        pTitleText->setSizeMax(4096, 4096);
     } else {
         delete (pTitleText);
+        pTitleText = nullptr;
     }
     mShowSystemText = !(pMain->getConfig()->getOption(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getFlags()
                         & PEMUConfig::Flags::HIDDEN);
@@ -205,6 +209,12 @@ void UIRomList::updateRomList() {
     } else if (pTitleText) {
         pTitleText->setString(std::to_string(mGameList.getAvailableCount()) + "/" +
                               std::to_string(pRomList->gameList->getCount(systemId)));
+    }
+    if (pTitleText && mTitleMaxWidth > 0) {
+        pTitleText->setScale(1, 1);
+        const float width = pTitleText->getLocalBounds().width;
+        const float scale = width > mTitleMaxWidth ? mTitleMaxWidth / width : 1;
+        pTitleText->setScale(scale, scale);
     }
 
     if (pListBox) {

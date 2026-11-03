@@ -124,16 +124,16 @@ namespace {
 
 void pemu::borderfx::setSpeed(const std::string &speed) {
     s_still = speed == "OFF";
-    // turns per second of the colours around a box (about 3x faster than in 1.05)
+    // turns per second of the colours around a box, pulses per second of the selection
     if (speed == "SLOW") {
-        s_wave = 0.15f;
-        s_pulse = 0.7f;
+        s_wave = 0.50f;
+        s_pulse = 1.5f;
     } else if (speed == "FAST") {
-        s_wave = 0.90f;
-        s_pulse = 1.6f;
+        s_wave = 2.50f;
+        s_pulse = 4.0f;
     } else {
-        s_wave = 0.40f;
-        s_pulse = 1.1f;
+        s_wave = 1.20f;
+        s_pulse = 2.5f;
     }
 }
 

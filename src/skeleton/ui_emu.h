@@ -70,6 +70,8 @@ namespace pemu {
         // demo mode: "DEMO MODE - PRESS ANY BUTTON TO PLAY" at the bottom, all the time, in
         // the kiwi logo colours (letters flowing and waving, border like the ui's)
         c2d::RectangleShape *mDemoBox = nullptr;
+        // and the pppEmu logo at the bottom right (same size as in the game list)
+        c2d::Texture *mDemoLogo = nullptr;
         std::vector<c2d::Text *> mDemoChars;
         std::vector<float> mDemoCharsX;
         float mDemoCharsY = 0;

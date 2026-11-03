@@ -75,6 +75,7 @@ namespace pemu {
         UIListBox *pListBox = nullptr;
         RectangleShape *pBlur = nullptr;
         SkinnedText *pTitleText = nullptr;
+        float mTitleMaxWidth = 0;
         ss_api::GameList mGameList;
         bool mShowSystemText = false;
         bool mArtworkDbChecked = false;
