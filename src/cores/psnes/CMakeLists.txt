@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 # pppEmu version: the ps4 package version, shown on the loading screen and in pppemu.log.
 # Raise it with every release so the ps4 sees a new version.
-set(PPPEMU_VERSION "1.07")
+set(PPPEMU_VERSION "1.08")
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
 project(psnes)

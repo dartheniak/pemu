@@ -14,6 +14,13 @@ PGBAConfig::PGBAConfig(Renderer *renderer, const int version) : PEMUConfig(rende
     // no need for auto-scaling mode
     getOption(PEMUConfig::OptId::EMU_SCALING_MODE)->setArray({"ASPECT", "INTEGER"}, 0);
 
+    // pppEmu: screen colours of original game boy games (see pgba_ui_emu.cpp), before the
+    // config is loaded (or the saved value is not read)
+    if (const auto group = getGroup(EMULATION)) {
+        group->addOption({"GB_COLORS", {"WHITE", "CLASSIC GREEN", "LIGHT BLUE", "PINK"}, 0,
+                          EMU_PGBA_GB_COLORS, "SCREEN COLOURS OF ORIGINAL GAME BOY GAMES"});
+    }
+
     // "romlist.cpp" (RomList::build) will also reload config, but we need new roms paths
     PEMUConfig::load();
 
@@ -28,4 +35,5 @@ PGBAConfig::PGBAConfig(Renderer *renderer, const int version) : PEMUConfig(rende
     for (const auto &path: paths) {
         io->create(path.path);
     }
+
 }

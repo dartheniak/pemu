@@ -12,6 +12,7 @@ extern "C" {
 #include "mgba/core/serialize.h"
 #include "mgba/internal/gba/input.h"
 #include "mgba/internal/gb/gb.h"
+#include "mgba/internal/gb/io.h"
 }
 
 #define SAMPLE_RATE 44100
@@ -25,6 +26,35 @@ static size_t audioSampleBufferSize = 0;
 #define SAMPLES_PER_FRAME_MOVING_AVG_ALPHA (1.0f / 180.0f)
 
 #define PEMU_INPUT_BINDING 0x47434E31
+
+// pppEmu: original game boy screen colours (EMULATION > GB_COLORS), lightest to darkest
+// shade, 0xRRGGBB. Used for the background and both sprite palettes.
+static const uint32_t GB_COLORS[][4] = {
+        {0xFFFFFF, 0xADADAD, 0x525252, 0x000000},   // WHITE (mGBA's own)
+        {0x9BBC0F, 0x8BAC0F, 0x306230, 0x0F380F},   // CLASSIC GREEN (1989 game boy)
+        {0xB0DCFF, 0x50A0F0, 0x1C56B8, 0x0A1C52},   // LIGHT BLUE
+        {0xFFB8DA, 0xF0609E, 0xB81E62, 0x4A0828},   // PINK
+};
+
+// sets the colours if they're not the wanted ones (a new game, the option changed, a save
+// state loaded: mGBA puts its own back). Original game boy games only (not color, not SGB).
+static void applyGbColors(mCore *core, int index) {
+    if (!core || core->platform(core) != mPLATFORM_GB) return;
+    auto *gb = (struct GB *) core->board;
+    if (gb->model >= GB_MODEL_SGB) return;
+    if (index < 0 || index >= (int) (sizeof(GB_COLORS) / sizeof(GB_COLORS[0]))) index = 0;
+    const uint32_t *c = GB_COLORS[index];
+    bool same = true;
+    for (int i = 0; i < 12; i++) {
+        if (gb->video.dmgPalette[i] != (uint16_t) M_RGB8_TO_RGB5(c[i % 4])) same = false;
+    }
+    if (same) return;
+    for (int i = 0; i < 12; i++) GBVideoSetPalette(&gb->video, i, c[i % 4]);
+    // the screen uses them from the next palette write: done now with the current values
+    GBVideoWritePalette(&gb->video, GB_REG_BGP, gb->memory.io[GB_REG_BGP]);
+    GBVideoWritePalette(&gb->video, GB_REG_OBP0, gb->memory.io[GB_REG_OBP0]);
+    GBVideoWritePalette(&gb->video, GB_REG_OBP1, gb->memory.io[GB_REG_OBP1]);
+}
 
 PGBAUiEmu::PGBAUiEmu(UiMain *ui) : UiEmu(ui) {
     printf("PGENUiEmu()\n");
@@ -220,6 +250,11 @@ void PGBAUiEmu::onUpdate() {
         const auto buttons = getUi()->getInput()->getButtons(0);
         const auto keys = mInputMapKeyBits(&s_core->inputMap, PEMU_INPUT_BINDING, buttons, 0);
         s_core->setKeys(s_core, keys);
+
+        // pppEmu: original game boy colours
+        if (const auto opt = getUi()->getConfig()->get(PEMUConfig::OptId::EMU_PGBA_GB_COLORS, true)) {
+            applyGbColors(s_core, opt->getArrayIndex());
+        }
 
         // frame emulation
         s_core->runFrame(s_core);

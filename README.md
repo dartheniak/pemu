@@ -40,6 +40,8 @@ another console is started, pppEmu hands over to that console's program
 - **Skin**: dark semi-transparent boxes over a background picture, one picture per console
   page if wanted. Borders in the kiwi logo's colours flowing around the boxes, the selection
   pulsing (MAIN MENU > UI_OPTIONS > BORDER_ANIMATION: OFF, SLOW, NORMAL, FAST).
+- **Game Boy screen colours**: original Game Boy games in white, classic green, light blue or
+  pink (Game Boy emulator options, EMULATION > GB_COLORS, also per game).
 - **Save states** for all consoles, also from the list (L1 on a game, STATES).
 - **The share password** is stored encrypted in `config.cfg`.
 

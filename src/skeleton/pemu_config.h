@@ -67,6 +67,7 @@ namespace pemu {
             EMU_PSNES_FRAMESKIP,
             EMU_PSNES_TURBO_MODE,
             EMU_PSNES_TURBO_FRAMESKIP,
+            EMU_PGBA_GB_COLORS,
             NET_SMB_SERVER,
             NET_SMB_FOLDER,
             NET_SMB_USER,
