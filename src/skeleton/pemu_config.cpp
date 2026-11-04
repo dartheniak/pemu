@@ -39,12 +39,8 @@ PEMUConfig::PEMUConfig(Renderer *renderer, const std::string &name, int version)
 #ifdef __FULLSCREEN__
     main.addOption({"FULLSCREEN", {"OFF", "ON"}, 1, UI_FULLSCREEN, PEMU_CONFIG_RESTART_NEEDED});
 #endif
+    // pppEmu: no 4/3 skin layout (SKIN_ASPECT removed), the 16/9 one is always used
     Vector2i displaySize = C2DDevice::getDisplaySize();
-    int aspect_index = (float) displaySize.x / (float) displaySize.y > 1.33f ? 0 : 1;
-    main.addOption({
-        "SKIN_ASPECT", {"16/9", "4/3"}, aspect_index,
-        UI_SKIN_ASPECT, PEMU_CONFIG_RESTART_NEEDED
-    });
     main.addOption({
         "FONT_SCALING", {"0", "1", "2", "3", "4", "5"}, 0,
         UI_FONT_SCALING, PEMU_CONFIG_RESTART_NEEDED

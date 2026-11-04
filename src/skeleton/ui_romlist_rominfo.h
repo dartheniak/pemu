@@ -25,7 +25,8 @@ public:
 
     bool loadTexture(const ss_api::Game &game);
 
-    // bottom box (ROM_SYNOPSIS): the synopsis text, or a downloaded screenshot if there's none
+    // bottom box (ROM_SYNOPSIS): the synopsis text, or if there's none two downloaded images
+    // side by side (title screen and screenshot)
     void loadSecondImage(const ss_api::Game &game);
 
     bool hasSecondImage() const { return synoBox != nullptr; }
@@ -46,8 +47,8 @@ public:
     //
     c2d::RectangleShape *synoBox = nullptr;
     c2d::Text *synoText = nullptr;
-    c2d::C2DTexture *synoTexture = nullptr;
-    std::string synoTexturePath;
+    c2d::C2DTexture *synoTextures[2] = {nullptr, nullptr};
+    std::string synoTexturePaths[2];
     //
     c2d::RectangleShape *previewBox = nullptr;
     //

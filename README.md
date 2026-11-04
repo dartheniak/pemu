@@ -28,7 +28,8 @@ another console is started, pppEmu hands over to that console's program
   `Nintendo - Super Nintendo Entertainment System`, `Mega Drive`, `GBA`, `FBNeo`...),
   sub folders included. Network games are downloaded when started.
 - **Box art and game info**: downloaded from libretro (thumbnails and database) and
-  stored on the PS4. The bottom box shows an in-game screenshot.
+  stored on the PS4. The bottom box shows the title screen and an in-game screenshot side by
+  side.
 - **Arcade**: FBNeo romsets shown with their full names, bios files hidden, parent and bios
   zips downloaded with network games.
 - **Demo mode**: random games one after the other (2 minutes each by default), after an idle
@@ -98,13 +99,6 @@ The `ps4-pppemu` GitHub workflow (Actions tab, Run workflow) builds the same pac
 
 Ideas discussed but not done yet:
 
-- **More consoles through FBNeo**: PC Engine / TurboGrafx-16, ColecoVision, MSX, SG-1000,
-  Neo Geo Pocket, ZX Spectrum (the arcade program already runs them, each needs a page).
-- **Self-playing demos**: record a game session once and replay it in demo mode (Nestopia,
-  snes9x and FBNeo can record input). Demo mode now relies on the games' own attract demos.
-- **Game descriptions** in the bottom box from ScreenScraper (account + developer keys) or
-  TheGamesDB (API key). Would also give Sega CD and arcade games their genre and players
-  (libretro has no data for them).
 - **Sega CD in demo mode** (off on purpose: big downloads, bios).
 - **Name lookup through the router** if a network blocks the public DNS servers used for
   the artwork downloads (1.1.1.1, 8.8.8.8, 9.9.9.9).

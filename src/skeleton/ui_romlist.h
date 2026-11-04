@@ -48,7 +48,9 @@ namespace pemu {
 
         // image type shown in the bottom box (ROM_SYNOPSIS) when the game has no synopsis:
         // the screenshot, or the title screen if the screenshot is already the main image
-        Artwork::Type getSecondArtworkType();
+        // images of the bottom box: the two types not shown in the main box (title screen and
+        // screenshot when the main box shows the box art), left one first
+        std::vector<Artwork::Type> getSecondArtworkTypes();
 
         // true if images and game information are downloaded automatically (ARTWORK menu)
         bool isArtworkAutoDownload();

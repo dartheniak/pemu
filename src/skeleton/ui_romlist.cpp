@@ -439,10 +439,12 @@ void UIRomList::onUpdate() {
                 if (getPreview(game, PreviewType::Tex).empty() && !artwork->isMissing(game, getArtworkType())) {
                     types.push_back(getArtworkType());
                 }
-                if (pRomInfo->hasSecondImage() && game.synopsis.empty()
-                    && artwork->findImage(game, getSecondArtworkType()).empty()
-                    && !artwork->isMissing(game, getSecondArtworkType())) {
-                    types.push_back(getSecondArtworkType());
+                if (pRomInfo->hasSecondImage() && game.synopsis.empty()) {
+                    for (auto t: getSecondArtworkTypes()) {
+                        if (artwork->findImage(game, t).empty() && !artwork->isMissing(game, t)) {
+                            types.push_back(t);
+                        }
+                    }
                 }
                 artwork->request(game, types);
             }
@@ -598,8 +600,12 @@ void UIRomList::onDemoGameDone(const Game &game) {
     mIdleClock.restart();
 }
 
-Artwork::Type UIRomList::getSecondArtworkType() {
-    return getArtworkType() == Artwork::Type::Snap ? Artwork::Type::Title : Artwork::Type::Snap;
+std::vector<Artwork::Type> UIRomList::getSecondArtworkTypes() {
+    std::vector<Artwork::Type> types;
+    for (auto t: {Artwork::Type::Boxart, Artwork::Type::Title, Artwork::Type::Snap}) {
+        if (t != getArtworkType()) types.push_back(t);
+    }
+    return types;
 }
 
 bool UIRomList::isArtworkAutoDownload() {

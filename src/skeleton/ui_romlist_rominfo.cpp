@@ -151,46 +151,52 @@ void UIRomInfo::packInfoLines() {
 void UIRomInfo::loadSecondImage(const Game &game) {
     if (!synoBox) return;
 
-    std::string path;
     auto artwork = uiRomList->getRomList()->getArtwork(game);
-    if (artwork && !game.path.empty() && game.synopsis.empty()) {
-        path = artwork->findImage(game, uiRomList->getSecondArtworkType());
-    }
-
-    if (path.empty()) {
-        if (synoTexture) synoTexture->setVisibility(Visibility::Hidden);
-        synoTexturePath.clear();
-        return;
-    }
-    if (path == synoTexturePath && synoTexture) {
-        synoTexture->setVisibility(Visibility::Visible);
-        return;
-    }
-
-    if (synoTexture) {
-        synoBox->remove(synoTexture);
-        delete (synoTexture);
-        synoTexture = nullptr;
-    }
-    auto tex = new C2DTexture(path);
-    if (!tex->available || tex->getTextureRect().width <= 0 || tex->getTextureRect().height <= 0) {
-        delete (tex);
-        synoTexturePath.clear();
-        return;
-    }
-    // fit the box (aspect ratio kept, small margin), centered
+    const auto types = uiRomList->getSecondArtworkTypes();
     const Vector2f box = synoBox->getSize();
     const float margin = 6;
-    const float scaling = std::min((box.x - margin * 2) / (float) tex->getTextureRect().width,
-                                   (box.y - margin * 2) / (float) tex->getTextureRect().height);
-    tex->setOrigin(Origin::Center);
-    tex->setPosition(box.x / 2, box.y / 2);
-    tex->setScale(scaling, scaling);
-    tex->setAlpha(0);
-    tex->add(new TweenAlpha(0, 255, 0.3f, TweenLoop::None, TweenState::Playing));
-    synoBox->add(tex);
-    synoTexture = tex;
-    synoTexturePath = path;
+    // two halves of the box, each image fitted (aspect ratio kept) and centered in its half
+    const float halfW = box.x / 2;
+
+    for (size_t i = 0; i < 2; i++) {
+        std::string path;
+        if (artwork && !game.path.empty() && game.synopsis.empty() && i < types.size()) {
+            path = artwork->findImage(game, types[i]);
+        }
+
+        C2DTexture *&tex = synoTextures[i];
+        if (path.empty()) {
+            if (tex) tex->setVisibility(Visibility::Hidden);
+            synoTexturePaths[i].clear();
+            continue;
+        }
+        if (path == synoTexturePaths[i] && tex) {
+            tex->setVisibility(Visibility::Visible);
+            continue;
+        }
+
+        if (tex) {
+            synoBox->remove(tex);
+            delete (tex);
+            tex = nullptr;
+        }
+        auto t = new C2DTexture(path);
+        if (!t->available || t->getTextureRect().width <= 0 || t->getTextureRect().height <= 0) {
+            delete (t);
+            synoTexturePaths[i].clear();
+            continue;
+        }
+        const float scaling = std::min((halfW - margin * 2) / (float) t->getTextureRect().width,
+                                       (box.y - margin * 2) / (float) t->getTextureRect().height);
+        t->setOrigin(Origin::Center);
+        t->setPosition(halfW * (float) i + halfW / 2, box.y / 2);
+        t->setScale(scaling, scaling);
+        t->setAlpha(0);
+        t->add(new TweenAlpha(0, 255, 0.3f, TweenLoop::None, TweenState::Playing));
+        synoBox->add(t);
+        tex = t;
+        synoTexturePaths[i] = path;
+    }
 }
 
 void UIRomInfo::load(const Game &game) {

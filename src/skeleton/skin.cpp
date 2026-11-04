@@ -190,17 +190,7 @@ Skin::Skin(UiMain *u) {
         }
     }
 
-    // load 4/3 skin config override if needed
-    if (pMain->getConfig()->get(PEMUConfig::OptId::UI_SKIN_ASPECT)->getArrayIndex() == 1) {
-        for (const auto &path: mSkinPath) {
-            std::string cfgPath = path + "config.cfg.override.43";
-            if (pMain->getIo()->exist(cfgPath)) {
-                printf("Skin: loading configuration override for 4/3 ar (%s)\n", cfgPath.c_str());
-                pConfig->load(cfgPath);
-                break;
-            }
-        }
-    }
+    // pppEmu: no 4/3 layout any more (config.cfg.override.43 not used)
 
     ///
     /// compute global scaling from loaded configuration
