@@ -69,6 +69,9 @@ static const nh_system SYSTEMS[] = {
     { "gbc",     "Game Boy Color",                292, 1.00f },
     { "arcade",  "Arcade / MAME",                 322, 1.00f },
     { "nds",     "Nintendo DS",                     0, 0.00f },
+    /* pppEmu: one grey scene for every page, coloured on screen (rainbow cycle, see
+     * neon_background.cpp); brighter than "nds" (sat 0 keeps the lightness) */
+    { "mono",    "pppEmu rainbow (grey, tinted)",   0, 0.00f },
 };
 #define NSYS ((int)(sizeof(SYSTEMS) / sizeof(SYSTEMS[0])))
 

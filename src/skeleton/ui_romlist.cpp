@@ -151,8 +151,8 @@ std::string UIRomList::getPreview(const Game &game, UIRomList::PreviewType type)
 }
 
 void UIRomList::updateBackground() {
-    // the animated background's colours follow the console page (L2 / R2)
-    pMain->getBackground()->setPage(pMain->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString());
+    // the animated background (neon_background.h), if not started yet (demo mode hand-off)
+    pMain->getBackground()->start();
 }
 
 void UIRomList::updateRomList() {

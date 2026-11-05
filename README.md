@@ -39,7 +39,7 @@ another console is started, pppEmu hands over to that console's program
 - **Shared settings**: display (scaling, filter, effect) and controller settings are the
   same in all the emulators. A game only keeps the settings changed for that game.
 - **Skin**: dark semi-transparent boxes over an animated "Neon Horizon" background (retro sun,
-  grid, mountains, palms), one colour per console page, crossfading when the page changes. Borders in the kiwi logo's colours flowing around the boxes, the selection
+  moving grid, mountains, palms) cycling through the kiwi logo colours like the borders. Borders in the kiwi logo's colours flowing around the boxes, the selection
   pulsing (MAIN MENU > UI_OPTIONS > BORDER_ANIMATION: OFF, SLOW, NORMAL, FAST).
 - **Game Boy screen colours**: original Game Boy games in white, classic green, light blue or
   pink (Game Boy emulator options, EMULATION > GB_COLORS, also per game).

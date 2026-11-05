@@ -87,7 +87,7 @@ namespace pemu {
         std::string mDemoLastGame;
         bool mDemoPending = false;
 
-        // animated background's colours for the console page (neon_background.h)
+        // starts the animated background if not yet (neon_background.h)
         void updateBackground();
 
         c2d::C2DClock mTimerLoadInfo;

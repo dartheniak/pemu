@@ -5,27 +5,17 @@
 #include "pemu.h"
 #include "pemu_log.h"
 #include "nh_bg.h"
+#include "border_fx.h"
 #include "neon_background.h"
 
 using namespace c2d;
 using namespace pemu;
 
-// our console pages, in the L2 / R2 order, and the module's ids (see SYSTEMS in nh_bg.c)
-static const struct {
-    const char *page, *id;
-} PAGES[] = {
-        {"ALL",              "default"},
-        {"Master System",    "sms"},
-        {"Game Gear",        "gg"},
-        {"Mega Drive",       "genesis"},
-        {"Sega CD",          "segacd"},
-        {"NES",              "nes"},
-        {"Game Boy",         "gb"},
-        {"Game Boy Color",   "gbc"},
-        {"Game Boy Advance", "gba"},
-        {"Super Nintendo",   "snes"},
-        {"Arcade",           "arcade"},
-};
+// the grey scene (SYSTEMS in nh_bg.c)
+#define SCENE_ID "mono"
+
+// colour loop: this many times slower than the borders' colours (NORMAL: about 8 s per loop)
+#define CYCLE_SLOWER 10.0f
 
 NeonBackground::NeonBackground(UiMain *ui) {
     pMain = ui;
@@ -37,15 +27,8 @@ NeonBackground::~NeonBackground() {
     // the texture belongs to the ui (deleted with it)
 }
 
-const char *NeonBackground::systemId(const std::string &page) {
-    for (const auto &p: PAGES) {
-        if (page == p.page) return p.id;
-    }
-    return "default";
-}
-
-void NeonBackground::start(const char *id) {
-    if (mNh || mFailed) return;
+void NeonBackground::start() {
+    if (mNh || mFailed || !mEnabled) return;
     mFailed = true;
 
     // the screen's size; colours in memory order R, G, B, A (the texture is GL_RGBA /
@@ -65,42 +48,28 @@ void NeonBackground::start(const char *id) {
     pMain->add(mTexture);
     mTexture->setLayer(-1000);  // behind everything (after add: add() sorts before inserting)
 
+    // disk cache: only the grey scene is used now, older files (one per console colour) go
     const std::string dir = pMain->getIo()->getDataPath() + "cache/background";
     pMain->getIo()->create(pMain->getIo()->getDataPath() + "cache");
     pMain->getIo()->create(dir);
-    mNh = nh_bg_create_async(&s, NH_ABGR8888, id, dir.c_str());
+    for (const auto &f: pMain->getIo()->getDirList(dir)) {
+        if (f.type == c2d::Io::Type::File && f.name.rfind(SCENE_ID "_", 0) != 0) {
+            pMain->getIo()->removeFile(dir + "/" + f.name);
+        }
+    }
+
+    mNh = nh_bg_create_async(&s, NH_ABGR8888, SCENE_ID, dir.c_str());
     if (!mNh) {
         logLine("background: could not be started");
         return;
     }
     mFailed = false;
-    mId = id;
-
-    // the other pages into the disk cache while idle (only missing ones are built)
-    const char *ids[sizeof(PAGES) / sizeof(PAGES[0])];
-    int n = 0;
-    for (const auto &p: PAGES) ids[n++] = p.id;
-    nh_bg_prebuild(mNh, ids, n);
-
     mClock.restart();
-    logLine("background: started %ix%i, %s", s.w, s.h, id);
-}
-
-void NeonBackground::setPage(const std::string &page) {
-    const char *id = systemId(page);
-    if (!mNh) {
-        if (mEnabled) start(id);
-        return;
-    }
-    if (mId == id) return;
-    mId = id;
-    nh_bg_set_system(mNh, id);
-    logLine("background: %s", id);
+    logLine("background: started %ix%i", s.w, s.h);
 }
 
 void NeonBackground::update(bool visible) {
     if (!mNh || !mTexture) return;
-    nh_bg_set_idle_work(mNh, visible ? 1 : 0);
     if (!visible) {
         if (mTexture->isVisible()) mTexture->setVisibility(Visibility::Hidden);
         mClock.restart();
@@ -111,8 +80,8 @@ void NeonBackground::update(bool visible) {
     double dt = mClock.restart().asSeconds();
     if (dt > 0.25) dt = 1.0 / 60;
 
-    // the texture's pixels stay from frame to frame: only the changed rows (sun, grid, or
-    // everything while switching page) are redrawn and sent to the GPU
+    // the texture's pixels stay from frame to frame: only the changed rows (sun, grid) are
+    // redrawn and sent to the GPU
     uint8_t *pixels;
     int pitch;
     const auto size = mTexture->getTextureRect();
@@ -123,5 +92,10 @@ void NeonBackground::update(bool visible) {
         mTexture->lock(&pixels, &pitch, {0, y0, size.width, y1 - y0});
         mTexture->unlock();
     }
+
+    // rainbow: the grey scene times the cycling colour (done by the GPU)
+    const float pos = borderfx::getTime() * borderfx::getWaveSpeed() / CYCLE_SLOWER;
+    mTexture->setFillColor(borderfx::getColor(pos));
+
     if (drawn && !mTexture->isVisible()) mTexture->setVisibility(Visibility::Visible);
 }
