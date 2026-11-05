@@ -103,11 +103,11 @@ network share, in `/data/pppemu/roms/` and on USB drives:
   (USA), `bios_CD_E.bin` (Europe), `bios_CD_J.bin` (Japan). libretro has no game information
   (developer, genre...) for Sega CD, only images.
 
-Backgrounds (in `/data/pppemu/skins/default/`, 1920x1080 jpg or png): `background.jpg`
-for ALL, and one per console page: `background_super_nintendo.jpg`,
-`background_mega_drive.jpg`, `background_master_system.jpg`, `background_game_gear.jpg`,
-`background_nes.jpg`, `background_sega_cd.jpg`, `background_game_boy.jpg`,
-`background_game_boy_color.jpg`, `background_game_boy_advance.jpg`, `background_arcade.jpg`.
+Background: the animated "Neon Horizon" scene (`src/skeleton/nh_bg.c`), one colour per console
+page, crossfading when the page changes. The colours are the `SYSTEMS` table in `nh_bg.c`, the
+page names are matched to it in `backgroundId()` (`src/skeleton/ui_romlist.cpp`).
+`background.jpg` in `/data/pppemu/skins/default/` (1920x1080) is only shown while the game
+list loads and for the moment the animated background takes to be built.
 
 Super Nintendo games run in pppEmu itself, NES games in the NES program (`/app0/pnes.bin`,
 data in `/data/pppemu/pnes/`). Sega games run in the Genesis program

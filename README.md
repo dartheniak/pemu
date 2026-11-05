@@ -38,8 +38,8 @@ another console is started, pppEmu hands over to that console's program
   that game. Saves are never written during a demo.
 - **Shared settings**: display (scaling, filter, effect) and controller settings are the
   same in all the emulators. A game only keeps the settings changed for that game.
-- **Skin**: dark semi-transparent boxes over a background picture, one picture per console
-  page if wanted. Borders in the kiwi logo's colours flowing around the boxes, the selection
+- **Skin**: dark semi-transparent boxes over an animated "Neon Horizon" background (retro sun,
+  grid, mountains, palms), one colour per console page, crossfading when the page changes. Borders in the kiwi logo's colours flowing around the boxes, the selection
   pulsing (MAIN MENU > UI_OPTIONS > BORDER_ANIMATION: OFF, SLOW, NORMAL, FAST).
 - **Game Boy screen colours**: original Game Boy games in white, classic green, light blue or
   pink (Game Boy emulator options, EMULATION > GB_COLORS, also per game).
@@ -63,7 +63,7 @@ another console is started, pppEmu hands over to that console's program
    pppemu.log            debug log, the last line shows the last step that ran
    roms/                 local games (console folders inside, found by name)
    media/<console>/      downloaded box art, screenshots and game information
-   skins/default/        background.jpg, background_<console>.jpg (1920x1080)
+   skins/default/        background.jpg (1920x1080, shown while the list loads)
    cache/                downloaded network games, game list cache
    psnes/                Super Nintendo: saves, save states, per-game settings, cheats
    pgen/                 Sega consoles (+ bios/ for Sega CD: bios_CD_U.bin, _E, _J)
@@ -115,5 +115,6 @@ Not tested yet: USB drives, long demo runs, 2-player games, real Neo Geo / CPS s
 - [libsmb2](https://github.com/sahlberg/libsmb2) (network shares)
 - [libretro thumbnails and database](https://github.com/libretro) (box art, game information)
 - OpenOrbis / pacbrew (PS4 toolchain)
+- Neon Horizon animated background (`nh_bg.c`)
 
 License: GPLv3, see [LICENSE](LICENSE). The emulators keep their own licenses.

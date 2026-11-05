@@ -1,12 +1,7 @@
-# pppEmu skin: dark semi-transparent boxes over a background picture.
-# Background: put a 1920x1080 "background.jpg" (or edit "texture" below) in
-# /data/pppemu/skins/default/ on the ps4. Without it, the background is black.
-# One background per console (shown when that console is selected with L2 / R2):
-# background_master_system.jpg, background_game_gear.jpg, background_mega_drive.jpg,
-# background_sega_cd.jpg, background_nes.jpg, background_game_boy.jpg,
-# background_game_boy_color.jpg, background_game_boy_advance.jpg,
-# background_super_nintendo.jpg, background_arcade.jpg (.png also works; a console
-# without its own picture shows background.jpg). Borders: kiwi logo colours (animated:
+# pppEmu skin: dark semi-transparent boxes over the animated "Neon Horizon" background
+# (src/skeleton/nh_bg.c, one colour per console page). "background.jpg" (1920x1080, in
+# /data/pppemu/skins/default/ on the ps4) is only shown while the list loads and until the
+# animated background is ready. Borders: kiwi logo colours (animated:
 # MAIN MENU > UI_OPTIONS > BORDER_ANIMATION, see border_fx.h).
 # Colors are [ red, green, blue, alpha ], alpha 0 = invisible .. 255 = opaque.
 SKIN_CONFIG :

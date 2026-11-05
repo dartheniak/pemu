@@ -7,6 +7,9 @@
 
 class UIRomInfo;
 
+// animated background (nh_bg.h)
+struct nh_bg;
+
 namespace pemu {
 
     class UIRomList : public SkinnedRectangle {
@@ -87,11 +90,17 @@ namespace pemu {
         std::string mDemoLastGame;
         bool mDemoPending = false;
 
-        // per console background ("background_mega_drive.jpg" in the skin folder), shown
-        // instead of the skin's own background when that console is selected (L2 / R2)
+        // animated "Neon Horizon" background (nh_bg.h), one colour per console page (L2 / R2):
+        // drawn into a texture every frame, behind the list. The skin's own background
+        // picture is only shown until the first one is built.
         void updateBackground();
+        void renderBackground();
+        void createBackground();
+        bool mBackgroundFailed = false;
+        ::nh_bg *mNh = nullptr;
         c2d::C2DTexture *mBackground = nullptr;
-        std::string mBackgroundPath;
+        c2d::C2DClock mBackgroundClock;
+        std::string mBackgroundSystem;
 
         c2d::C2DClock mTimerLoadInfo;
 #ifdef __3DS__
