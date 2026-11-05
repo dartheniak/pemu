@@ -53,6 +53,11 @@ void UiMain::init(UIRomList *romList, UiMenu *menu, UiEmu *emu, UiMenuState *sta
     getInput()->setRepeatDelay(INPUT_DELAY);
 }
 
+NeonBackground *UiMain::getBackground() {
+    if (!pBackground) pBackground = new NeonBackground(this);
+    return pBackground;
+}
+
 void UiMain::onUpdate() {
     unsigned int buttons = getInput()->getButtons();
     if (buttons & Input::Button::Quit) {
@@ -78,6 +83,9 @@ void UiMain::onUpdate() {
             }
         }
     }
+
+    // pppEmu: animated background, drawn while no game is on screen
+    if (pBackground) pBackground->update(!pEmu || !pEmu->isVisible());
 
     // pppEmu: animated borders (not while a game is running)
     if (pConfig && (!pEmu || !pEmu->isVisible() || pEmu->isPaused())) {

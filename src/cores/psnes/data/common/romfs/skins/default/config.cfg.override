@@ -1,7 +1,5 @@
 # pppEmu skin: dark semi-transparent boxes over the animated "Neon Horizon" background
-# (src/skeleton/nh_bg.c, one colour per console page). "background.jpg" (1920x1080, in
-# /data/pppemu/skins/default/ on the ps4) is only shown while the list loads and until the
-# animated background is ready. Borders: kiwi logo colours (animated:
+# (src/skeleton/neon_background.h, one colour per console page). Borders: kiwi logo colours (animated:
 # MAIN MENU > UI_OPTIONS > BORDER_ANIMATION, see border_fx.h).
 # Colors are [ red, green, blue, alpha ], alpha 0 = invisible .. 255 = opaque.
 SKIN_CONFIG :
@@ -14,7 +12,7 @@ SKIN_CONFIG :
     color3 = [ 247, 59, 146, 255 ];      // MESSAGEBOX > outline_color
     color4 = [ 0, 0, 0, 225 ];          // STATUSBOX > color
     color5 = [ 247, 59, 146, 255 ];      // STATUSBOX > outline_color
-    color6 = [ 0, 0, 0, 255 ];          // MAIN > color (behind the background picture)
+    color6 = [ 0, 0, 0, 0 ];            // MAIN > color (transparent: the animated background shows)
     color7 = [ 247, 59, 146, 255 ];      // MAIN > outline_color
     color8 = [ 255, 255, 255, 255 ];    // MAIN > TITLE > color
     color9 = [ 0, 0, 0, 255 ];          // MAIN > TITLE > outline_color
@@ -56,9 +54,6 @@ SKIN_CONFIG :
   };
   MAIN :
   {
-    texture = "background.jpg";
-    texture_filtering = 1;
-    texture_color = [ 255, 255, 255, 255 ];
     // pppEmu logo (pppemu_logo.png, 600x621): top left of the screen, and big while the game
     // list loads. Same shape as the picture.
     TITLE :

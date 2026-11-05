@@ -38,6 +38,7 @@
 #include "ui_progressbox.h"
 #include "ui_menu_state.h"
 #include "ui_status_box.h"
+#include "neon_background.h"
 #include "ui_main.h"
 #include "ui_help.h"
 

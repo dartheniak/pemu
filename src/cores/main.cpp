@@ -81,6 +81,15 @@ int main(int argc, char **argv) {
         }
     }
 
+    // pppEmu: animated background started now, so it's already there on the loading screen
+    // (not in a program that only runs a game; between two demo games only if the list
+    // ends up shown)
+    pemu_ui->getBackground()->setEnabled(game.path.empty());
+    if (game.path.empty() && !launchArgs.demoNext) {
+        pemu_ui->getBackground()->setPage(!launchArgs.system.empty() ? launchArgs.system
+                                          : cfg->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString());
+    }
+
     // ui
     const auto romList = new PEMURomList(pemu_ui, cfg->getCoreVersion(), cfg->getCoreSupportedExt());
     if (game.path.empty()) {

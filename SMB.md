@@ -104,10 +104,10 @@ network share, in `/data/pppemu/roms/` and on USB drives:
   (developer, genre...) for Sega CD, only images.
 
 Background: the animated "Neon Horizon" scene (`src/skeleton/nh_bg.c`), one colour per console
-page, crossfading when the page changes. The colours are the `SYSTEMS` table in `nh_bg.c`, the
-page names are matched to it in `backgroundId()` (`src/skeleton/ui_romlist.cpp`).
-`background.jpg` in `/data/pppemu/skins/default/` (1920x1080) is only shown while the game
-list loads and for the moment the animated background takes to be built.
+page, crossfading when the page changes, also on the loading screen. The colours are the
+`SYSTEMS` table in `nh_bg.c`, the page names are matched to it in `PAGES`
+(`src/skeleton/neon_background.cpp`). Each page's scene is built once and saved in
+`/data/pppemu/cache/background/` (about 20 MB per page), then loaded from there.
 
 Super Nintendo games run in pppEmu itself, NES games in the NES program (`/app0/pnes.bin`,
 data in `/data/pppemu/pnes/`). Sega games run in the Genesis program

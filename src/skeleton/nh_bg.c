@@ -8,6 +8,7 @@
  *   -DNH_FADE=s      crossfade length in seconds (default 0.45)
  */
 #include "nh_bg.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -1023,8 +1024,107 @@ struct nh_bg {
     pthread_t th; pthread_mutex_t mu; pthread_cond_t cv; int quit;
     int jobPending; char jobKey[32]; nh_palette jobPal;
     nh_layers *doneL; char doneKey[32];
+    /* pppEmu: palettes to build and save to the disk cache while idle (not kept in memory) */
+    char prebuild[24][32]; int prebuildN, prebuildI, idleAllowed;
 #endif
+    char cacheDir[256];           /* pppEmu: built scenes saved here ("" = no disk cache) */
 };
+
+/* ======================================================================
+ * pppEmu: disk cache. A built scene is saved once ("<dir>/<key>_<hash>.nhb") and loaded
+ * the next times (a fraction of a second instead of 1-3 s on the ps4). The hash covers
+ * the settings, the palette, the pixel format and this file's layout, so any change
+ * builds it again.
+ * ==================================================================== */
+#define NH_FILE_VERSION 2u
+
+static uint32_t fnv(uint32_t h, const void *p, size_t n) {
+    const unsigned char *b = (const unsigned char *)p;
+    for (size_t i = 0; i < n; i++) { h ^= b[i]; h *= 16777619u; }
+    return h;
+}
+static void cache_path(const nh_bg *bg, const char *key, const nh_palette *p, char *out, size_t n) {
+    uint32_t v = NH_FILE_VERSION, sz = (uint32_t)sizeof(nh_layers), f = (uint32_t)bg->fmt;
+    uint32_t h = 2166136261u;
+    h = fnv(h, &bg->s, sizeof bg->s); h = fnv(h, p, sizeof *p);
+    h = fnv(h, &f, sizeof f); h = fnv(h, &v, sizeof v); h = fnv(h, &sz, sizeof sz);
+    snprintf(out, n, "%s/%s_%08x.nhb", bg->cacheDir, key, (unsigned)h);
+}
+static int wr(FILE *f, const void *p, size_t n) { return !n || fwrite(p, 1, n, f) == n; }
+static int rd(FILE *f, void *p, size_t n) { return !n || fread(p, 1, n, f) == n; }
+static void layer_sizes(const nh_layers *L, size_t *rn, size_t *fn) {
+    *rn = (size_t)L->rw * L->rh;
+    *fn = L->driveOn ? (size_t)L->W * (L->H - L->fy0) : 0;
+}
+static void cache_save(const nh_bg *bg, const char *key, const nh_palette *p, const nh_layers *L) {
+    if (!bg->cacheDir[0] || !L) return;
+    char path[320], tmp[330];
+    cache_path(bg, key, p, path, sizeof path);
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    FILE *f = fopen(tmp, "wb");
+    if (!f) return;
+    size_t rn, fn; layer_sizes(L, &rn, &fn);
+    int ok = wr(f, "NHB2", 4) && wr(f, L, sizeof *L)
+             && wr(f, L->baked, sizeof(uint32_t) * (size_t)L->W * L->H);
+    if (ok && rn) ok = wr(f, L->x0, sizeof(float) * 3 * rn) && wr(f, L->x1, sizeof(float) * 3 * rn)
+                       && wr(f, L->vig, sizeof(float) * rn) && wr(f, L->c0, sizeof(int) * (size_t)L->rh)
+                       && wr(f, L->c1, sizeof(int) * (size_t)L->rh) && wr(f, L->gap0, sizeof(float) * (size_t)L->rh);
+    if (ok && fn) ok = wr(f, L->floorG, sizeof(uint32_t) * fn);
+    if (fclose(f) != 0) ok = 0;
+    if (ok) { remove(path); ok = rename(tmp, path) == 0; }
+    if (!ok) remove(tmp);
+}
+static nh_layers *cache_load(const nh_bg *bg, const char *key, const nh_palette *p) {
+    if (!bg->cacheDir[0]) return 0;
+    char path[320], magic[4];
+    cache_path(bg, key, p, path, sizeof path);
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    nh_layers *L = (nh_layers *)calloc(1, sizeof(nh_layers));
+    int ok = L && rd(f, magic, 4) && !memcmp(magic, "NHB2", 4) && rd(f, L, sizeof *L)
+             && L->W == bg->s.w && L->H == bg->s.h && L->fmt == bg->fmt;
+    if (ok) {
+        size_t rn, fn; layer_sizes(L, &rn, &fn);
+        L->baked = 0; L->x0 = L->x1 = L->vig = L->gap0 = 0; L->c0 = L->c1 = 0; L->floorG = 0;
+        L->baked = (uint32_t *)malloc(sizeof(uint32_t) * (size_t)L->W * L->H);
+        ok = L->baked && rd(f, L->baked, sizeof(uint32_t) * (size_t)L->W * L->H);
+        if (ok && rn) {
+            L->x0 = (float *)malloc(sizeof(float) * 3 * rn); L->x1 = (float *)malloc(sizeof(float) * 3 * rn);
+            L->vig = (float *)malloc(sizeof(float) * rn);
+            L->c0 = (int *)malloc(sizeof(int) * (size_t)L->rh); L->c1 = (int *)malloc(sizeof(int) * (size_t)L->rh);
+            L->gap0 = (float *)malloc(sizeof(float) * (size_t)L->rh);
+            ok = L->x0 && L->x1 && L->vig && L->c0 && L->c1 && L->gap0
+                 && rd(f, L->x0, sizeof(float) * 3 * rn) && rd(f, L->x1, sizeof(float) * 3 * rn)
+                 && rd(f, L->vig, sizeof(float) * rn) && rd(f, L->c0, sizeof(int) * (size_t)L->rh)
+                 && rd(f, L->c1, sizeof(int) * (size_t)L->rh) && rd(f, L->gap0, sizeof(float) * (size_t)L->rh);
+        }
+        if (ok && fn) {
+            L->floorG = (uint32_t *)malloc(sizeof(uint32_t) * fn);
+            ok = L->floorG && rd(f, L->floorG, sizeof(uint32_t) * fn);
+        }
+    } else if (L) {
+        L->baked = 0; L->x0 = L->x1 = L->vig = L->gap0 = 0; L->c0 = L->c1 = 0; L->floorG = 0;
+    }
+    fclose(f);
+    if (!ok) { nh_free(L); remove(path); return 0; }
+    return L;
+}
+static int cache_exists(const nh_bg *bg, const char *key, const nh_palette *p) {
+    if (!bg->cacheDir[0]) return 1;
+    char path[320];
+    cache_path(bg, key, p, path, sizeof path);
+    FILE *f = fopen(path, "rb");
+    if (f) fclose(f);
+    return f != 0;
+}
+/* loaded from the disk cache, or built (and saved) */
+static nh_layers *load_or_build(nh_bg *bg, const char *key, const nh_palette *p) {
+    nh_layers *L = cache_load(bg, key, p);
+    if (L) return L;
+    L = nh_build(&bg->s, p, bg->fmt);
+    if (L) cache_save(bg, key, p, L);
+    return L;
+}
 
 static nh_layers *cache_get(nh_bg *bg, const char *key) {
     for (int i = 0; i < NH_CACHE; i++) if (bg->cache[i].L && !strcmp(bg->cache[i].key, key)) { bg->cache[i].used = ++bg->tick; return bg->cache[i].L; }
@@ -1053,11 +1153,25 @@ static void *worker(void *arg) {
     nh_bg *bg = (nh_bg *)arg;
     pthread_mutex_lock(&bg->mu);
     for (;;) {
-        while (!bg->quit && !bg->jobPending) pthread_cond_wait(&bg->cv, &bg->mu);
+        while (!bg->quit && !bg->jobPending
+               && !(bg->idleAllowed && bg->prebuildI < bg->prebuildN))
+            pthread_cond_wait(&bg->cv, &bg->mu);
         if (bg->quit) break;
+        if (!bg->jobPending) {
+            /* pppEmu: idle: one more palette into the disk cache (built, saved, freed) */
+            char key[32]; memcpy(key, bg->prebuild[bg->prebuildI++], 32);
+            pthread_mutex_unlock(&bg->mu);
+            nh_palette pal = nh_system_palette(key);
+            if (!cache_exists(bg, key, &pal)) {
+                nh_layers *L = nh_build(&bg->s, &pal, bg->fmt);
+                if (L) { cache_save(bg, key, &pal, L); nh_free(L); }
+            }
+            pthread_mutex_lock(&bg->mu);
+            continue;
+        }
         char key[32]; nh_palette pal = bg->jobPal; memcpy(key, bg->jobKey, 32); bg->jobPending = 0;
         pthread_mutex_unlock(&bg->mu);
-        nh_layers *L = nh_build(&bg->s, &pal, bg->fmt);
+        nh_layers *L = load_or_build(bg, key, &pal);
         pthread_mutex_lock(&bg->mu);
         if (bg->doneL) nh_free(bg->doneL);
         bg->doneL = L; memcpy(bg->doneKey, key, 32);
@@ -1085,11 +1199,12 @@ nh_bg *nh_bg_create(const nh_settings *s, nh_pixfmt fmt) {
 
 /* pppEmu: same as nh_bg_create, but the first palette is built on the worker thread so
  * startup doesn't wait for it: nh_bg_render draws nothing (returns 0) until it's ready. */
-nh_bg *nh_bg_create_async(const nh_settings *s, nh_pixfmt fmt, const char *firstId) {
+nh_bg *nh_bg_create_async(const nh_settings *s, nh_pixfmt fmt, const char *firstId, const char *cacheDir) {
 #if NH_THREADS
     nh_bg *bg = (nh_bg *)calloc(1, sizeof(nh_bg));
     if (!bg) return 0;
-    bg->s = s ? *s : DEFAULT_SETTINGS; bg->fmt = fmt; bg->fade = 1;
+    bg->s = s ? *s : DEFAULT_SETTINGS; bg->fmt = fmt; bg->fade = 1; bg->idleAllowed = 1;
+    if (cacheDir) { strncpy(bg->cacheDir, cacheDir, sizeof bg->cacheDir - 1); }
     strcpy(bg->wantKey, "default");
     pthread_mutex_init(&bg->mu, 0); pthread_cond_init(&bg->cv, 0);
     if (pthread_create(&bg->th, 0, worker, bg) != 0) {
@@ -1100,8 +1215,35 @@ nh_bg *nh_bg_create_async(const nh_settings *s, nh_pixfmt fmt, const char *first
     return bg;
 #else
     nh_bg *bg = nh_bg_create(s, fmt);
+    if (bg && cacheDir) strncpy(bg->cacheDir, cacheDir, sizeof bg->cacheDir - 1);
     if (bg && firstId) nh_bg_set_system(bg, firstId);
     return bg;
+#endif
+}
+
+void nh_bg_prebuild(nh_bg *bg, const char *const *systemIds, int count) {
+#if NH_THREADS
+    pthread_mutex_lock(&bg->mu);
+    bg->prebuildN = bg->prebuildI = 0;
+    for (int i = 0; i < count && bg->prebuildN < 24; i++) {
+        strncpy(bg->prebuild[bg->prebuildN], systemIds[i], 31); bg->prebuild[bg->prebuildN++][31] = 0;
+    }
+    pthread_cond_signal(&bg->cv);
+    pthread_mutex_unlock(&bg->mu);
+#else
+    (void)bg; (void)systemIds; (void)count;
+#endif
+}
+
+void nh_bg_set_idle_work(nh_bg *bg, int allowed) {
+#if NH_THREADS
+    if (bg->idleAllowed == allowed) return;
+    pthread_mutex_lock(&bg->mu);
+    bg->idleAllowed = allowed;
+    pthread_cond_signal(&bg->cv);
+    pthread_mutex_unlock(&bg->mu);
+#else
+    (void)bg; (void)allowed;
 #endif
 }
 
@@ -1115,7 +1257,7 @@ void nh_bg_set_palette(nh_bg *bg, const char *key, const nh_palette *p) {
     pthread_cond_signal(&bg->cv);
     pthread_mutex_unlock(&bg->mu);
 #else
-    L = nh_build(&bg->s, p, bg->fmt);
+    L = load_or_build(bg, key, p);
     if (L) { cache_put(bg, key, L); show(bg, key, L); }
 #endif
 }

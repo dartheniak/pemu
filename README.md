@@ -63,8 +63,7 @@ another console is started, pppEmu hands over to that console's program
    pppemu.log            debug log, the last line shows the last step that ran
    roms/                 local games (console folders inside, found by name)
    media/<console>/      downloaded box art, screenshots and game information
-   skins/default/        background.jpg (1920x1080, shown while the list loads)
-   cache/                downloaded network games, game list cache
+   cache/                downloaded network games, game list cache, background scenes
    psnes/                Super Nintendo: saves, save states, per-game settings, cheats
    pgen/                 Sega consoles (+ bios/ for Sega CD: bios_CD_U.bin, _E, _J)
    pnes/                 NES

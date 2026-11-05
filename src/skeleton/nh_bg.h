@@ -77,8 +77,15 @@ void   nh_bg_set_system(nh_bg *bg, const char *systemId);
 void   nh_bg_set_palette(nh_bg *bg, const char *key, const nh_palette *p);
 /* Optional: build palettes at boot so first switches are instant (blocking). */
 void   nh_bg_prewarm(nh_bg *bg, const char *const *systemIds, int count);
-/* pppEmu: like nh_bg_create, without waiting: "firstId" is built on the worker thread. */
-nh_bg *nh_bg_create_async(const nh_settings *s, nh_pixfmt fmt, const char *firstId);
+/* pppEmu: like nh_bg_create, without waiting: "firstId" is built on the worker thread.
+ * "cacheDir" (existing folder, or NULL): built scenes are saved there and loaded the next
+ * times instead of being built again. */
+nh_bg *nh_bg_create_async(const nh_settings *s, nh_pixfmt fmt, const char *firstId, const char *cacheDir);
+/* pppEmu: while idle, build these systems into the disk cache (not kept in memory), so
+ * switching to them later only loads a file. */
+void   nh_bg_prebuild(nh_bg *bg, const char *const *systemIds, int count);
+/* pppEmu: 0 = no idle building (a game is running), 1 = allowed again */
+void   nh_bg_set_idle_work(nh_bg *bg, int allowed);
 /* Draw one frame. dt = seconds since last call. pitch in pixels (not bytes).
  * pppEmu: returns 0 (nothing drawn) while no palette is built yet, else 1. */
 int    nh_bg_render(nh_bg *bg, double dt, uint32_t *dst, int pitchPixels);

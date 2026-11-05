@@ -6,7 +6,6 @@
 #include "pemu.h"
 #include "launcher.h"
 #include "pemu_log.h"
-#include "nh_bg.h"
 #include "ss_api.h"
 
 using namespace c2d;
@@ -151,92 +150,9 @@ std::string UIRomList::getPreview(const Game &game, UIRomList::PreviewType type)
     return {};
 }
 
-// our console page names -> the background module's system ids (see SYSTEMS in nh_bg.c)
-static const char *backgroundId(const std::string &page) {
-    static const struct {
-        const char *page, *id;
-    } ids[] = {
-            {"ALL",              "default"},
-            {"Master System",    "sms"},
-            {"Game Gear",        "gg"},
-            {"Mega Drive",       "genesis"},
-            {"Sega CD",          "segacd"},
-            {"NES",              "nes"},
-            {"Game Boy",         "gb"},
-            {"Game Boy Color",   "gbc"},
-            {"Game Boy Advance", "gba"},
-            {"Super Nintendo",   "snes"},
-            {"Arcade",           "arcade"},
-    };
-    for (const auto &i: ids) {
-        if (page == i.page) return i.id;
-    }
-    return "default";
-}
-
 void UIRomList::updateBackground() {
-    const std::string sys = pMain->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString();
-    const char *id = backgroundId(sys);
-    if (mBackgroundSystem == id) return;
-    mBackgroundSystem = id;
-    // made the first time the list is on screen (renderBackground): not in a program that
-    // only runs a game
-    if (mNh) {
-        nh_bg_set_system(mNh, id);
-        logLine("UIRomList: background %s", id);
-    }
-}
-
-void UIRomList::createBackground() {
-    const char *id = mBackgroundSystem.empty() ? "default" : mBackgroundSystem.c_str();
-    // the list's size, colours in memory order R, G, B, A (the texture is GL_RGBA /
-    // GL_UNSIGNED_BYTE: 0xAABBGGRR as a little endian uint32 = NH_ABGR8888)
-    nh_settings s = *nh_default_settings();
-    s.w = (int) getSize().x;
-    s.h = (int) getSize().y;
-    mBackground = new C2DTexture(Vector2i(s.w, s.h), Texture::Format::RGBA8);
-    if (!mBackground->available) {
-        delete (mBackground);
-        mBackground = nullptr;
-        logLine("UIRomList: background texture not available");
-        return;
-    }
-    mBackground->setFilter(Texture::Filter::Point);
-    mBackground->setVisibility(Visibility::Hidden);    // until the first frame is drawn
-    add(mBackground);
-    mBackground->setLayer(-1);  // behind everything (after add: add() sorts before inserting)
-    mNh = nh_bg_create_async(&s, NH_ABGR8888, id);
-    mBackgroundClock.restart();
-    logLine("UIRomList: animated background %ix%i, %s", s.w, s.h, id);
-}
-
-void UIRomList::renderBackground() {
-    if (!mNh && !mBackgroundFailed) {
-        createBackground();
-        mBackgroundFailed = mNh == nullptr;
-    }
-    if (!mNh || !mBackground) return;
-    // time since the last frame (pauses, a game in between: no jump)
-    double dt = mBackgroundClock.restart().asSeconds();
-    if (dt > 0.25) dt = 1.0 / 60;
-
-    // the texture's pixels stay from frame to frame: only the changed rows (the sun, or all of
-    // it while switching console) are redrawn and sent to the GPU
-    uint8_t *pixels;
-    int pitch;
-    const auto size = mBackground->getTextureRect();
-    mBackground->lock(&pixels, &pitch, {0, 0, size.width, size.height});
-    int y0 = 0, y1 = 0;
-    const int drawn = nh_bg_render_rows(mNh, dt, (uint32_t *) pixels, pitch / 4, &y0, &y1);
-    if (y1 > y0) {
-        mBackground->lock(&pixels, &pitch, {0, y0, size.width, y1 - y0});
-        mBackground->unlock();
-    }
-    if (drawn && !mBackground->isVisible()) {
-        mBackground->setVisibility(Visibility::Visible);
-        // the skin's own background picture: not needed any more
-        if (getTexture()) getTexture()->setVisibility(Visibility::Hidden);
-    }
+    // the animated background's colours follow the console page (L2 / R2)
+    pMain->getBackground()->setPage(pMain->getConfig()->get(PEMUConfig::OptId::UI_FILTER_SYSTEM)->getString());
 }
 
 void UIRomList::updateRomList() {
@@ -434,9 +350,6 @@ bool UIRomList::onInput(c2d::Input::Player *players) {
 }
 
 void UIRomList::onUpdate() {
-    // animated background: every frame the list is on screen
-    if (isVisible()) renderBackground();
-
     // demo mode, back from another program: the next game right away (the list stays hidden)
     if (mDemoPending) {
         if (pMain->getUiMessageBox()->isVisible()) {
@@ -662,7 +575,5 @@ bool UIRomList::isArtworkAutoDownload() {
 
 UIRomList::~UIRomList() {
     printf("~UIRomList\n");
-    nh_bg_destroy(mNh);
-    mNh = nullptr;
     delete (pRomList);
 }

@@ -48,6 +48,9 @@ namespace pemu {
 
         c2d::Vector2f getScaling() { return pSkin->getScaling(); }
 
+        // pppEmu: animated background (neon_background.h), made by the first setPage()
+        NeonBackground *getBackground();
+
         bool done = false;
 
     private:
@@ -61,6 +64,7 @@ namespace pemu {
         UIProgressBox *pProgressBox = nullptr;
         c2d::MessageBox *pMessageBox = nullptr;
         UiStatusBox *pStatusBox = nullptr;
+        NeonBackground *pBackground = nullptr;
         c2d::C2DClock mTimer;
         unsigned int mOldKeys = 0;
     };
