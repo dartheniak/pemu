@@ -151,8 +151,7 @@ std::string UIRomList::getPreview(const Game &game, UIRomList::PreviewType type)
 }
 
 void UIRomList::updateBackground() {
-    // the animated background (neon_background.h), if not started yet (demo mode hand-off)
-    pMain->getBackground()->start();
+    // the animated background (neon_background.h): started by its update() when shown
 }
 
 void UIRomList::updateRomList() {

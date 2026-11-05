@@ -17,7 +17,9 @@ PGBAConfig::PGBAConfig(Renderer *renderer, const int version) : PEMUConfig(rende
     // pppEmu: screen colours of original game boy games (see pgba_ui_emu.cpp), before the
     // config is loaded (or the saved value is not read)
     if (const auto group = getGroup(EMULATION)) {
-        group->addOption({"GB_COLORS", {"WHITE", "CLASSIC GREEN", "LIGHT BLUE", "PINK"}, 0,
+        // pppEmu 1.14: classic green by default (was "GB_COLORS", WHITE: new name so the
+        // new default is used)
+        group->addOption({"GB_PALETTE", {"WHITE", "CLASSIC GREEN", "LIGHT BLUE", "PINK"}, 1,
                           EMU_PGBA_GB_COLORS, "SCREEN COLOURS OF ORIGINAL GAME BOY GAMES"});
     }
 

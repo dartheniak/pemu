@@ -2,6 +2,7 @@
 // pppEmu: animated background (see neon_background.h)
 //
 
+#include <cstring>
 #include "pemu.h"
 #include "pemu_log.h"
 #include "nh_bg.h"
@@ -28,7 +29,7 @@ NeonBackground::~NeonBackground() {
 }
 
 void NeonBackground::start() {
-    if (mNh || mFailed || !mEnabled) return;
+    if (mNh || mFailed) return;
     mFailed = true;
 
     // the screen's size; colours in memory order R, G, B, A (the texture is GL_RGBA /
@@ -48,9 +49,18 @@ void NeonBackground::start() {
     pMain->add(mTexture);
     mTexture->setLayer(-1000);  // behind everything (after add: add() sorts before inserting)
 
-    // disk cache: only the grey scene is used now, older files (one per console colour) go
-    const std::string dir = pMain->getIo()->getDataPath() + "cache/background";
-    pMain->getIo()->create(pMain->getIo()->getDataPath() + "cache");
+    // disk cache, shared by all of pppEmu's programs ("/data/pppemu/cache/background", not
+    // "/data/pppemu/pgen/cache/..."): only the grey scene is used now, older files go
+    std::string root = pMain->getIo()->getDataPath();
+    for (const char *p: {"pgen/", "pnes/", "pgba/", "pfbneo/"}) {
+        if (root.size() > strlen(p) && root.compare(root.size() - strlen(p), strlen(p), p) == 0
+            && root[root.size() - strlen(p) - 1] == '/') {
+            root.resize(root.size() - strlen(p));
+            break;
+        }
+    }
+    const std::string dir = root + "cache/background";
+    pMain->getIo()->create(root + "cache");
     pMain->getIo()->create(dir);
     for (const auto &f: pMain->getIo()->getDirList(dir)) {
         if (f.type == c2d::Io::Type::File && f.name.rfind(SCENE_ID "_", 0) != 0) {
@@ -69,6 +79,7 @@ void NeonBackground::start() {
 }
 
 void NeonBackground::update(bool visible) {
+    if (visible && !mNh) start();
     if (!mNh || !mTexture) return;
     if (!visible) {
         if (mTexture->isVisible()) mTexture->setVisibility(Visibility::Hidden);

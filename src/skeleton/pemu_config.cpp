@@ -48,6 +48,9 @@ PEMUConfig::PEMUConfig(Renderer *renderer, const std::string &name, int version)
     main.addOption({"VIDEO_SNAP_DELAY", {"3", "5", "7", "10"}, 1, UI_VIDEO_SNAP_DELAY});
     // pppEmu: borders in the kiwi logo colours, flowing (OFF: still), see border_fx.h
     main.addOption({"BORDER_ANIMATION", {"OFF", "SLOW", "NORMAL", "FAST"}, 2, UI_BORDER_ANIMATION});
+    // pppEmu: the animated background also around the game picture (games and demo mode)
+    main.addOption({"GAME_BACKGROUND", {"OFF", "ON"}, 1, UI_GAME_BACKGROUND,
+                    "ANIMATED BACKGROUND AROUND THE GAME (ALSO IN DEMO MODE)"});
 
     // build  skin list
     std::vector<std::string> skins;

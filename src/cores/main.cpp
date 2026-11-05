@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
     // pppEmu: animated background started now, so it's already there on the loading screen
     // (not in a program that only runs a game; between two demo games only if the list
     // ends up shown)
-    pemu_ui->getBackground()->setEnabled(game.path.empty());
+    pemu_ui->getBackground()->setListProgram(game.path.empty());
     if (game.path.empty() && !launchArgs.demoNext) pemu_ui->getBackground()->start();
 
     // ui

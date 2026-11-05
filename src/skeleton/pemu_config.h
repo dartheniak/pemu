@@ -34,6 +34,7 @@ namespace pemu {
             UI_FONT_SCALING,
             UI_VIDEO_SNAP_DELAY,
             UI_BORDER_ANIMATION,
+            UI_GAME_BACKGROUND,
             UI_FILTER_FAVORITES,
             UI_FILTER_AVAILABLE,
             UI_FILTER_CLONES,

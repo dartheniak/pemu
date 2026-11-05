@@ -84,14 +84,34 @@ void UiMain::onUpdate() {
         }
     }
 
-    // pppEmu: animated background, drawn while no game is on screen
-    if (pBackground) pBackground->update(!pEmu || !pEmu->isVisible());
-
-    // pppEmu: animated borders (not while a game is running)
-    if (pConfig && (!pEmu || !pEmu->isVisible() || pEmu->isPaused())) {
+    // pppEmu: animations' speed (borders, background colours)
+    if (pConfig) {
         if (const auto opt = pConfig->get(PEMUConfig::OptId::UI_BORDER_ANIMATION)) {
             borderfx::setSpeed(opt->getString());
         }
+    }
+
+    // pppEmu: animated background: behind the list / loading screen (the program showing the
+    // list), and around the game picture if UI_OPTIONS > GAME_BACKGROUND is ON (games and
+    // demo mode). Not when the game picture fills the whole screen.
+    if (pBackground && pConfig) {
+        bool show = pBackground->isListProgram();
+        if (pEmu && pEmu->isVisible()) {
+            const auto opt = pConfig->get(PEMUConfig::OptId::UI_GAME_BACKGROUND);
+            show = opt && opt->getInteger();
+            if (show && pEmu->getVideo()) {
+                const FloatRect b = pEmu->getVideo()->getGlobalBounds();
+                if (b.left <= 0 && b.top <= 0 && b.left + b.width >= getSize().x
+                    && b.top + b.height >= getSize().y) {
+                    show = false;
+                }
+            }
+        }
+        pBackground->update(show);
+    }
+
+    // pppEmu: animated borders (not while a game is running)
+    if (pConfig && (!pEmu || !pEmu->isVisible() || pEmu->isPaused())) {
         borderfx::update(this, getSize().x, getSize().y);
     }
 

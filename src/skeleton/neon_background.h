@@ -26,14 +26,16 @@ namespace pemu {
 
         ~NeonBackground();
 
-        // only a program showing the game list has it (not one started to run a game)
-        void setEnabled(bool value) { mEnabled = value; }
+        // the program showing the game list (shown behind it), else one started to run a
+        // game (only shown around the game, if UI_OPTIONS > GAME_BACKGROUND is ON)
+        void setListProgram(bool value) { mListProgram = value; }
 
-        // started now if not yet (and enabled)
+        bool isListProgram() const { return mListProgram; }
+
+        // started now if not yet
         void start();
 
-        // every frame: draws the next frame if "visible" (the list or the loading screen is
-        // on screen), else hidden (a game is running)
+        // every frame: draws the next frame if "visible" (started then if needed), else hidden
         void update(bool visible);
 
     private:
@@ -42,7 +44,7 @@ namespace pemu {
         c2d::C2DTexture *mTexture = nullptr;
         c2d::C2DClock mClock;
         bool mFailed = false;
-        bool mEnabled = false;
+        bool mListProgram = false;
     };
 }
 
